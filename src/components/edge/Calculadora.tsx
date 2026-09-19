@@ -176,13 +176,15 @@ function PathsChart({ sim, start }: { sim: ReturnType<typeof simulateKelly>; sta
   const innerW = W - pad.left - pad.right;
   const innerH = H - pad.top - pad.bottom;
 
+  // Log scale so a few runaway series don't flatten the rest.
+  const lg = (v: number) => Math.log(Math.max(v, 0.01));
   const all = sim.paths.flat().concat(sim.medianPath);
-  const minV = Math.min(...all, start);
-  const maxV = Math.max(...all, start * 1.05, 1);
+  const minV = lg(Math.min(...all, start));
+  const maxV = Math.max(lg(Math.max(...all, start * 1.1)), minV + 0.1);
   const x = (i: number) => pad.left + (i / sim.bets) * innerW;
-  const y = (v: number) => pad.top + innerH - ((v - minV) / (maxV - minV || 1)) * innerH;
+  const y = (v: number) => pad.top + innerH - ((lg(v) - minV) / (maxV - minV)) * innerH;
   const line = (p: number[]) => p.map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
-  const ticks = Array.from({ length: 4 }, (_, i) => minV + ((maxV - minV) / 3) * i);
+  const ticks = Array.from({ length: 4 }, (_, i) => Math.exp(minV + ((maxV - minV) / 3) * i));
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Simulación de banca">
