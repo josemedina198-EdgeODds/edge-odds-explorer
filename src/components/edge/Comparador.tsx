@@ -13,8 +13,8 @@ interface Props {
 }
 
 export function Comparador({ analysis, selectedOutcome, onSelectOutcome, onAnalyze, runKey }: Props) {
-  const home = TEAMS[analysis.match.home];
-  const away = TEAMS[analysis.match.away];
+  const home = TEAMS[analysis.match.home]!;
+  const away = TEAMS[analysis.match.away]!;
 
   return (
     <section id="comparador" className="border-y border-border bg-card/40">

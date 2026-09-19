@@ -55,8 +55,8 @@ export interface ModelResult {
 }
 
 export function runModel(match: Match, teams = TEAMS, avg = leagueAverages(teams)): ModelResult {
-  const h = teams[match.home];
-  const a = teams[match.away];
+  const h = teams[match.home]!;
+  const a = teams[match.away]!;
 
   const homeStrength: Strengths = {
     attack: h.home.goalsFor / h.home.played / avg.homeGoals,
@@ -157,8 +157,8 @@ export interface MatchAnalysis {
 export function analyzeMatch(match: Match): MatchAnalysis {
   const model = runModel(match);
   const market = marketProbabilities(match.odds);
-  const homeName = TEAMS[match.home].name;
-  const awayName = TEAMS[match.away].name;
+  const homeName = TEAMS[match.home]!.name;
+  const awayName = TEAMS[match.away]!.name;
   const labels: Record<Outcome, string> = { home: homeName, draw: "Empate", away: awayName };
 
   const outcomes = {} as Record<Outcome, OutcomeAnalysis>;

@@ -14,8 +14,8 @@ interface Props {
 export function Calculadora({ analysis, selectedOutcome, bankroll, onBankroll }: Props) {
   const oa = analysis.outcomes[selectedOutcome];
   const stake = bankroll * oa.kelly;
-  const home = TEAMS[analysis.match.home];
-  const away = TEAMS[analysis.match.away];
+  const home = TEAMS[analysis.match.home]!;
+  const away = TEAMS[analysis.match.away]!;
 
   const sim = useMemo(
     () => simulateKelly({ bankroll: Math.max(bankroll, 0), p: oa.modelProb, odds: oa.odds, fraction: oa.kelly }),
