@@ -158,7 +158,7 @@ function Kv({ label, value }: { label: string; value: string }) {
   );
 }
 
-function StatBox({ label, value, tone }: { label: string; value: string; tone?: "pos" | "neg" }) {
+function StatBox({ label, value, tone }: { label: string; value: string; tone?: "pos" | "neg" | undefined }) {
   return (
     <div className="bg-card p-4">
       <dt className="text-[11px] text-subtle-foreground">{label}</dt>
