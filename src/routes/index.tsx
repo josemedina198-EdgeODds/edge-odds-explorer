@@ -32,7 +32,7 @@ function Index() {
 
   // Default selection: the outcome with the highest EV across all matches.
   const initial = useMemo(() => {
-    let best = { matchId: analyses[0].match.id, outcome: "home" as Outcome, ev: -Infinity };
+    let best = { matchId: analyses[0]!.match.id, outcome: "home" as Outcome, ev: -Infinity };
     for (const a of analyses)
       for (const o of OUTCOMES)
         if (a.outcomes[o].ev > best.ev) best = { matchId: a.match.id, outcome: o, ev: a.outcomes[o].ev };
