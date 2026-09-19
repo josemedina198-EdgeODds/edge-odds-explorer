@@ -44,7 +44,7 @@ function Index() {
   const [bankroll, setBankroll] = useState(100);
   const [runKey, setRunKey] = useState(0);
 
-  const analysis = analyses.find((a) => a.match.id === selectedMatch) ?? analyses[0];
+  const analysis = (analyses.find((a) => a.match.id === selectedMatch) ?? analyses[0])!;
 
   const positiveCount = analyses.reduce(
     (n, a) => n + OUTCOMES.filter((o) => a.outcomes[o].ev > 0).length,
