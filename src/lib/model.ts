@@ -55,8 +55,8 @@ export interface ModelResult {
 }
 
 export function runModel(match: Match, teams = TEAMS, avg = leagueAverages(teams)): ModelResult {
-  const h = teams[match.home];
-  const a = teams[match.away];
+  const h = teams[match.home]!;
+  const a = teams[match.away]!;
 
   const homeStrength: Strengths = {
     attack: h.home.goalsFor / h.home.played / avg.homeGoals,
@@ -70,7 +70,7 @@ export function runModel(match: Match, teams = TEAMS, avg = leagueAverages(teams
   const lambdaHome = homeStrength.attack * awayStrength.defense * avg.homeGoals * HOME_ADVANTAGE;
   const lambdaAway = awayStrength.attack * homeStrength.defense * avg.awayGoals;
 
-  const pH = Array.from({ length: MAX_GOALS + 1 }, (_, k) => poissonPmf(k, lambdaHome));
+  const pH: number[] = Array.from({ length: MAX_GOALS + 1 }, (_, k) => poissonPmf(k, lambdaHome));
   const pA = Array.from({ length: MAX_GOALS + 1 }, (_, k) => poissonPmf(k, lambdaAway));
 
   let home = 0,
@@ -79,7 +79,7 @@ export function runModel(match: Match, teams = TEAMS, avg = leagueAverages(teams
   let best = { home: 0, away: 0, p: 0 };
   for (let i = 0; i <= MAX_GOALS; i++) {
     for (let j = 0; j <= MAX_GOALS; j++) {
-      const p = pH[i] * pA[j];
+      const p = (pH[i] ?? 0) * (pA[j] ?? 0);
       if (i > j) home += p;
       else if (i === j) draw += p;
       else away += p;
@@ -157,8 +157,8 @@ export interface MatchAnalysis {
 export function analyzeMatch(match: Match): MatchAnalysis {
   const model = runModel(match);
   const market = marketProbabilities(match.odds);
-  const homeName = TEAMS[match.home].name;
-  const awayName = TEAMS[match.away].name;
+  const homeName = TEAMS[match.home]!.name;
+  const awayName = TEAMS[match.away]!.name;
   const labels: Record<Outcome, string> = { home: homeName, draw: "Empate", away: awayName };
 
   const outcomes = {} as Record<Outcome, OutcomeAnalysis>;
@@ -256,15 +256,15 @@ export function simulateKelly(opts: {
   }
 
   const sortedFinals = [...finals].sort((x, y) => x - y);
-  const q = (arr: number[], k: number) => arr[Math.min(arr.length - 1, Math.floor(k * arr.length))];
+  const q = (arr: number[], k: number) => arr[Math.min(arr.length - 1, Math.floor(k * arr.length))] ?? 0;
   const sortedDd = [...drawdowns].sort((x, y) => x - y);
 
   const medianPath: number[] = new Array(bets + 1);
   const col = new Float64Array(sims);
   for (let i = 0; i <= bets; i++) {
-    for (let s = 0; s < sims; s++) col[s] = allPaths[s][i];
+    for (let s = 0; s < sims; s++) col[s] = allPaths[s]![i]!;
     const sorted = Float64Array.from(col).sort();
-    medianPath[i] = sorted[Math.floor(sims / 2)];
+    medianPath[i] = sorted[Math.floor(sims / 2)] ?? 0;
   }
 
   return {
@@ -276,7 +276,7 @@ export function simulateKelly(opts: {
     p90Final: q(sortedFinals, 0.9),
     probProfit: finals.filter((f) => f > bankroll).length / sims,
     medianMaxDrawdown: q(sortedDd, 0.5),
-    worstMaxDrawdown: sortedDd[sortedDd.length - 1],
+    worstMaxDrawdown: sortedDd[sortedDd.length - 1] ?? 0,
     bets,
     sims,
   };

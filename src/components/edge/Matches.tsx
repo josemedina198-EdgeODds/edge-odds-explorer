@@ -57,8 +57,8 @@ export function Matches({ analyses, selectedMatch, selectedOutcome, onSelect }: 
       <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {analyses.map((a) => {
           const isSel = a.match.id === selectedMatch;
-          const home = TEAMS[a.match.home];
-          const away = TEAMS[a.match.away];
+          const home = TEAMS[a.match.home]!;
+          const away = TEAMS[a.match.away]!;
           return (
             <article
               key={a.match.id}
