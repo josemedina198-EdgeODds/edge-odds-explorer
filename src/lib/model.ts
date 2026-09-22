@@ -1,4 +1,4 @@
-import { HOME_ADVANTAGE, MATCHES, TEAMS, type Match, type TeamStats } from "@/data/matches";
+import { HOME_ADVANTAGE, MATCHES, TEAMS, type TeamStats } from "@/data/matches";
 
 export type Outcome = "home" | "draw" | "away";
 export const OUTCOMES: Outcome[] = ["home", "draw", "away"];
@@ -7,11 +7,38 @@ export const OUTCOME_CODE: Record<Outcome, string> = { home: "1", draw: "X", awa
 const MAX_GOALS = 10;
 export const KELLY_CAP = 0.25;
 
+/* ---------- Generic analysis input (demo dataset or live odds) ---------- */
+
+export interface TeamRef {
+  name: string;
+  short: string;
+}
+
+export interface BestOdds {
+  odds: number;
+  book: string;
+}
+
+export interface AnalysisInput {
+  id: string;
+  league: string;
+  kickoff: string;
+  home: TeamRef;
+  away: TeamRef;
+  /** Consensus decimal odds per outcome. */
+  odds: Record<Outcome, number>;
+  /** Highest odds available per outcome with the bookmaker name (live only). */
+  bestOdds?: Record<Outcome, BestOdds>;
+  bookmakerCount?: number;
+  /** Team keys into the demo dataset; when present the model uses recent form. */
+  formKeys?: { home: string; away: string };
+}
+
 /* ---------- League context ---------- */
 
 export interface LeagueAverages {
-  homeGoals: number; // avg goals scored by home teams per match
-  awayGoals: number; // avg goals scored by away teams per match
+  homeGoals: number;
+  awayGoals: number;
 }
 
 export function leagueAverages(teams: Record<string, TeamStats> = TEAMS): LeagueAverages {
@@ -48,31 +75,21 @@ export interface Strengths {
 export interface ModelResult {
   lambdaHome: number;
   lambdaAway: number;
-  homeStrength: Strengths;
-  awayStrength: Strengths;
+  homeStrength?: Strengths;
+  awayStrength?: Strengths;
   probs: Record<Outcome, number>;
   mostLikelyScore: { home: number; away: number; p: number };
+  /** How the expected goals were obtained. */
+  source: "form" | "market";
 }
 
-export function runModel(match: Match, teams = TEAMS, avg = leagueAverages(teams)): ModelResult {
-  const h = teams[match.home]!;
-  const a = teams[match.away]!;
+function pmfVector(lambda: number): number[] {
+  return Array.from({ length: MAX_GOALS + 1 }, (_, k) => poissonPmf(k, lambda));
+}
 
-  const homeStrength: Strengths = {
-    attack: h.home.goalsFor / h.home.played / avg.homeGoals,
-    defense: h.home.goalsAgainst / h.home.played / avg.awayGoals,
-  };
-  const awayStrength: Strengths = {
-    attack: a.away.goalsFor / a.away.played / avg.awayGoals,
-    defense: a.away.goalsAgainst / a.away.played / avg.homeGoals,
-  };
-
-  const lambdaHome = homeStrength.attack * awayStrength.defense * avg.homeGoals * HOME_ADVANTAGE;
-  const lambdaAway = awayStrength.attack * homeStrength.defense * avg.awayGoals;
-
-  const pH: number[] = Array.from({ length: MAX_GOALS + 1 }, (_, k) => poissonPmf(k, lambdaHome));
-  const pA = Array.from({ length: MAX_GOALS + 1 }, (_, k) => poissonPmf(k, lambdaAway));
-
+function outcomeProbs(lambdaHome: number, lambdaAway: number) {
+  const pH = pmfVector(lambdaHome);
+  const pA = pmfVector(lambdaAway);
   let home = 0,
     draw = 0,
     away = 0;
@@ -86,15 +103,83 @@ export function runModel(match: Match, teams = TEAMS, avg = leagueAverages(teams
       if (p > best.p) best = { home: i, away: j, p };
     }
   }
-  const total = home + draw + away; // normalize truncated tail
+  const total = home + draw + away;
   return {
-    lambdaHome,
-    lambdaAway,
-    homeStrength,
-    awayStrength,
-    probs: { home: home / total, draw: draw / total, away: away / total },
+    probs: { home: home / total, draw: draw / total, away: away / total } as Record<Outcome, number>,
     mostLikelyScore: best,
   };
+}
+
+/** Form-based model from the demo dataset. */
+export function runModel(
+  formKeys: { home: string; away: string },
+  teams = TEAMS,
+  avg = leagueAverages(teams),
+): ModelResult {
+  const h = teams[formKeys.home]!;
+  const a = teams[formKeys.away]!;
+
+  const homeStrength: Strengths = {
+    attack: h.home.goalsFor / h.home.played / avg.homeGoals,
+    defense: h.home.goalsAgainst / h.home.played / avg.awayGoals,
+  };
+  const awayStrength: Strengths = {
+    attack: a.away.goalsFor / a.away.played / avg.awayGoals,
+    defense: a.away.goalsAgainst / a.away.played / avg.homeGoals,
+  };
+
+  const lambdaHome = homeStrength.attack * awayStrength.defense * avg.homeGoals * HOME_ADVANTAGE;
+  const lambdaAway = awayStrength.attack * homeStrength.defense * avg.awayGoals;
+  const { probs, mostLikelyScore } = outcomeProbs(lambdaHome, lambdaAway);
+
+  return { lambdaHome, lambdaAway, homeStrength, awayStrength, probs, mostLikelyScore, source: "form" };
+}
+
+/**
+ * Expected goals inferred from the fair market probabilities: grid search over
+ * lambda pairs, keeping the pair whose 1X2 distribution is closest to the market.
+ */
+export function fitLambdas(fair: Record<Outcome, number>): { lambdaHome: number; lambdaAway: number } {
+  const grid: number[] = [];
+  for (let v = 0.1; v <= 4.0001; v += 0.05) grid.push(Math.round(v * 100) / 100);
+  const pmfs = grid.map(pmfVector);
+
+  let bestErr = Infinity;
+  let bestPair = { lambdaHome: 1.4, lambdaAway: 1.1 };
+
+  for (let hi = 0; hi < grid.length; hi++) {
+    const pH = pmfs[hi]!;
+    for (let ai = 0; ai < grid.length; ai++) {
+      const pA = pmfs[ai]!;
+      let home = 0,
+        draw = 0,
+        away = 0;
+      for (let i = 0; i <= MAX_GOALS; i++) {
+        const ph = pH[i] ?? 0;
+        if (ph < 1e-9) continue;
+        for (let j = 0; j <= MAX_GOALS; j++) {
+          const p = ph * (pA[j] ?? 0);
+          if (i > j) home += p;
+          else if (i === j) draw += p;
+          else away += p;
+        }
+      }
+      const t = home + draw + away;
+      const err =
+        (home / t - fair.home) ** 2 + (draw / t - fair.draw) ** 2 + (away / t - fair.away) ** 2;
+      if (err < bestErr) {
+        bestErr = err;
+        bestPair = { lambdaHome: grid[hi]!, lambdaAway: grid[ai]! };
+      }
+    }
+  }
+  return bestPair;
+}
+
+export function runMarketModel(fair: Record<Outcome, number>): ModelResult {
+  const { lambdaHome, lambdaAway } = fitLambdas(fair);
+  const { probs, mostLikelyScore } = outcomeProbs(lambdaHome, lambdaAway);
+  return { lambdaHome, lambdaAway, probs, mostLikelyScore, source: "market" };
 }
 
 /* ---------- Market ---------- */
@@ -102,10 +187,10 @@ export function runModel(match: Match, teams = TEAMS, avg = leagueAverages(teams
 export interface MarketResult {
   implied: Record<Outcome, number>;
   fair: Record<Outcome, number>;
-  overround: number; // e.g. 1.052 → 5.2% margin
+  overround: number;
 }
 
-export function marketProbabilities(odds: Match["odds"]): MarketResult {
+export function marketProbabilities(odds: Record<Outcome, number>): MarketResult {
   const implied = { home: 1 / odds.home, draw: 1 / odds.draw, away: 1 / odds.away };
   const overround = implied.home + implied.draw + implied.away;
   return {
@@ -141,30 +226,32 @@ export interface OutcomeAnalysis {
   odds: number;
   modelProb: number;
   marketProb: number;
-  edge: number; // modelProb - marketProb
+  edge: number;
   ev: number;
   kelly: number;
 }
 
 export interface MatchAnalysis {
-  match: Match;
+  match: AnalysisInput;
   model: ModelResult;
   market: MarketResult;
   outcomes: Record<Outcome, OutcomeAnalysis>;
-  best: Outcome; // highest EV
+  best: Outcome;
 }
 
-export function analyzeMatch(match: Match): MatchAnalysis {
-  const model = runModel(match);
-  const market = marketProbabilities(match.odds);
-  const homeName = TEAMS[match.home]!.name;
-  const awayName = TEAMS[match.away]!.name;
-  const labels: Record<Outcome, string> = { home: homeName, draw: "Empate", away: awayName };
+export function analyzeMatch(input: AnalysisInput): MatchAnalysis {
+  const market = marketProbabilities(input.odds);
+  const model = input.formKeys ? runModel(input.formKeys) : runMarketModel(market.fair);
+  const labels: Record<Outcome, string> = {
+    home: input.home.name,
+    draw: "Empate",
+    away: input.away.name,
+  };
 
   const outcomes = {} as Record<Outcome, OutcomeAnalysis>;
   for (const o of OUTCOMES) {
     const p = model.probs[o];
-    const odds = match.odds[o];
+    const odds = input.odds[o];
     outcomes[o] = {
       outcome: o,
       code: OUTCOME_CODE[o],
@@ -178,11 +265,29 @@ export function analyzeMatch(match: Match): MatchAnalysis {
     };
   }
   const best = OUTCOMES.reduce((b, o) => (outcomes[o].ev > outcomes[b].ev ? o : b), "home" as Outcome);
-  return { match, model, market, outcomes, best };
+  return { match: input, model, market, outcomes, best };
 }
 
-export function analyzeAll(matches = MATCHES): MatchAnalysis[] {
-  return matches.map(analyzeMatch);
+/** Demo dataset mapped into the generic input shape. */
+export function demoInputs(): AnalysisInput[] {
+  return MATCHES.map((m) => {
+    const h = TEAMS[m.home]!;
+    const a = TEAMS[m.away]!;
+    return {
+      id: m.id,
+      league: m.league,
+      kickoff: m.kickoff,
+      home: { name: h.name, short: h.short },
+      away: { name: a.name, short: a.short },
+      odds: { ...m.odds },
+      bookmakerCount: 1,
+      formKeys: { home: m.home, away: m.away },
+    } satisfies AnalysisInput;
+  });
+}
+
+export function analyzeAll(inputs: AnalysisInput[] = demoInputs()): MatchAnalysis[] {
+  return inputs.map(analyzeMatch);
 }
 
 /* ---------- Monte Carlo ---------- */
@@ -199,14 +304,14 @@ function mulberry32(seed: number) {
 }
 
 export interface SimulationResult {
-  paths: number[][]; // sampled paths for charting (bankroll after each bet, index 0 = start)
+  paths: number[][];
   medianPath: number[];
   finals: number[];
   medianFinal: number;
   p10Final: number;
   p90Final: number;
   probProfit: number;
-  medianMaxDrawdown: number; // as fraction of peak
+  medianMaxDrawdown: number;
   worstMaxDrawdown: number;
   bets: number;
   sims: number;
