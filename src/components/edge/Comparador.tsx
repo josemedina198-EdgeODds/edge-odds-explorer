@@ -1,4 +1,3 @@
-import { TEAMS } from "@/data/matches";
 import { OUTCOMES, fmtPct, type MatchAnalysis, type Outcome } from "@/lib/model";
 import { SectionHeading } from "./SectionHeading";
 import { Crest } from "./Matches";
@@ -13,8 +12,8 @@ interface Props {
 }
 
 export function Comparador({ analysis, selectedOutcome, onSelectOutcome, onAnalyze, runKey }: Props) {
-  const home = TEAMS[analysis.match.home]!;
-  const away = TEAMS[analysis.match.away]!;
+  const home = analysis.match.home;
+  const away = analysis.match.away;
 
   return (
     <section id="comparador" className="border-y border-border bg-card/40">

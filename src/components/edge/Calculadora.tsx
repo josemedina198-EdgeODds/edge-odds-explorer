@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { TEAMS } from "@/data/matches";
 import { KELLY_CAP, fmtMoney, fmtOdds, fmtPct, simulateKelly, type MatchAnalysis, type Outcome } from "@/lib/model";
 import { SectionHeading } from "./SectionHeading";
 import { EvTag } from "./Matches";
@@ -14,8 +13,8 @@ interface Props {
 export function Calculadora({ analysis, selectedOutcome, bankroll, onBankroll }: Props) {
   const oa = analysis.outcomes[selectedOutcome];
   const stake = bankroll * oa.kelly;
-  const home = TEAMS[analysis.match.home]!;
-  const away = TEAMS[analysis.match.away]!;
+  const home = analysis.match.home;
+  const away = analysis.match.away;
 
   const sim = useMemo(
     () => simulateKelly({ bankroll: Math.max(bankroll, 0), p: oa.modelProb, odds: oa.odds, fraction: oa.kelly }),

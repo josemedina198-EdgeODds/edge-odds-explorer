@@ -99,6 +99,48 @@
   --shadow-glow: 0 0 0 1px oklch(0.696 0.149 162.5 / 35%), 0 12px 48px -16px oklch(0.696 0.149 162.5 / 35%);
 }
 
+/* Light theme — same structure, inverted neutrals, identical accents. */
+.light {
+  --background: oklch(0.985 0.001 90);
+  --foreground: oklch(0.17 0.003 285);
+  --card: oklch(1 0 0);
+  --card-foreground: var(--foreground);
+  --surface: oklch(0.965 0.002 285);
+  --surface-raised: oklch(0.93 0.003 285);
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --primary: oklch(0.62 0.14 162.5);
+  --primary-foreground: oklch(0.99 0.01 165);
+  --secondary: var(--surface);
+  --secondary-foreground: var(--foreground);
+  --muted: var(--surface);
+  --muted-foreground: oklch(0.48 0.01 286);
+  --subtle-foreground: oklch(0.6 0.012 286);
+  --accent: var(--surface-raised);
+  --accent-foreground: var(--foreground);
+  --destructive: oklch(0.55 0.17 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --positive: oklch(0.58 0.14 162.5);
+  --positive-foreground: oklch(0.99 0.01 165);
+  --negative: oklch(0.55 0.17 24);
+  --negative-foreground: oklch(0.99 0 0);
+  --border: oklch(0.9 0.003 285);
+  --border-strong: oklch(0.83 0.004 285);
+  --input: var(--border-strong);
+  --ring: oklch(0.62 0.14 162.5 / 50%);
+  --chart-model: oklch(0.62 0.14 162.5);
+  --chart-market: oklch(0.72 0.008 286);
+  --shadow-card: 0 1px 2px 0 oklch(0 0 0 / 5%), 0 12px 32px -24px oklch(0 0 0 / 25%);
+  --shadow-glow: 0 0 0 1px oklch(0.62 0.14 162.5 / 35%), 0 12px 40px -18px oklch(0.62 0.14 162.5 / 30%);
+}
+
+.light .grid-fade {
+  background-image:
+    linear-gradient(to right, oklch(0 0 0 / 5%) 1px, transparent 1px),
+    linear-gradient(to bottom, oklch(0 0 0 / 5%) 1px, transparent 1px);
+}
+
+
 @layer base {
   * {
     border-color: var(--color-border);
