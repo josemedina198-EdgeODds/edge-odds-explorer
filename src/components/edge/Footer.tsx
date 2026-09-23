@@ -1,8 +1,6 @@
-import { MATCHES, TEAMS } from "@/data/matches";
 import { Logo } from "./Header";
 
-export function Footer() {
-  const teams = Object.keys(TEAMS).length;
+export function Footer({ source }: { source: "live" | "cache" | "demo" }) {
   return (
     <footer id="referencias" className="border-t border-border">
       <div className="container-edge py-14">
@@ -18,16 +16,20 @@ export function Footer() {
             <p className="eyebrow">Referencias de datos</p>
             <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
               <li>
-                Forma reciente: últimos 5 partidos en casa y 5 fuera de {teams} equipos.
+                Cuotas 1X2:{" "}
+                {source === "demo"
+                  ? "conjunto de demostración incluido en la app."
+                  : "consenso (mediana) de las casas disponibles para cada partido."}
               </li>
-              <li>Cuotas 1X2: cierre de mercado, {MATCHES.length} partidos de muestra.</li>
-              <li>Conjunto de datos de demostración, listo para sustituir por histórico real.</li>
+              <li>Probabilidades del mercado sin el margen de la casa.</li>
+              <li>Los partidos en vivo se guardan en tu navegador para no gastar consultas.</li>
             </ul>
           </div>
           <div>
             <p className="eyebrow">Producto</p>
             <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
               <li><a href="#partidos" className="hover:text-foreground">Partidos</a></li>
+              <li><a href="#resultados" className="hover:text-foreground">Resultados</a></li>
               <li><a href="#comparador" className="hover:text-foreground">Comparador</a></li>
               <li><a href="#valor-esperado" className="hover:text-foreground">Valor esperado</a></li>
               <li><a href="#calculadora" className="hover:text-foreground">Calculadora</a></li>
@@ -35,7 +37,7 @@ export function Footer() {
           </div>
         </div>
         <div className="mt-12 flex flex-col gap-2 border-t border-border pt-6 text-xs text-subtle-foreground md:flex-row md:items-center md:justify-between">
-          <span>© 2026 Edge Analytics</span>
+          <span>© 2026 OddsEdge</span>
           <span>Apuesta con responsabilidad. Solo mayores de 18 años.</span>
         </div>
       </div>
