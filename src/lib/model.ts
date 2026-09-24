@@ -176,8 +176,16 @@ export function fitLambdas(fair: Record<Outcome, number>): { lambdaHome: number;
   return bestPair;
 }
 
+/** Baseline expected goals used to temper extreme market estimates. */
+const BASELINE_HOME = 1.45;
+const BASELINE_AWAY = 1.15;
+const SHRINK = 0.12;
+
 export function runMarketModel(fair: Record<Outcome, number>): ModelResult {
-  const { lambdaHome, lambdaAway } = fitLambdas(fair);
+  const fitted = fitLambdas(fair);
+  const lambdaHome =
+    (fitted.lambdaHome * (1 - SHRINK) + BASELINE_HOME * SHRINK) * HOME_ADVANTAGE ** 0.25;
+  const lambdaAway = fitted.lambdaAway * (1 - SHRINK) + BASELINE_AWAY * SHRINK;
   const { probs, mostLikelyScore } = outcomeProbs(lambdaHome, lambdaAway);
   return { lambdaHome, lambdaAway, probs, mostLikelyScore, source: "market" };
 }
