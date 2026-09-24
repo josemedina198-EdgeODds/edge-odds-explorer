@@ -12,7 +12,7 @@ const STEPS = [
   {
     icon: Database,
     title: "Datos",
-    text: "Tomamos los goles a favor y en contra de cada equipo, separados en casa y fuera, y las cuotas 1X2 del mercado.",
+    text: "Traemos los partidos próximos y las cuotas 1X2 de las casas disponibles, además de la forma reciente de cada equipo.",
   },
   {
     icon: Cpu,

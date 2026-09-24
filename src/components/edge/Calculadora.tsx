@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { KELLY_CAP, fmtMoney, fmtOdds, fmtPct, simulateKelly, type MatchAnalysis, type Outcome } from "@/lib/model";
 import { SectionHeading } from "./SectionHeading";
 import { EvTag } from "./Matches";
+import { Exportar } from "./Exportar";
 
 interface Props {
   analysis: MatchAnalysis;
@@ -136,6 +137,8 @@ export function Calculadora({ analysis, selectedOutcome, bankroll, onBankroll }:
               <StatBox label="Caída máx. típica" value={`−${fmtPct(sim.medianMaxDrawdown, 0)}`} tone={sim.medianMaxDrawdown > 0 ? "neg" : undefined} />
               <StatBox label="Rango 10–90 %" value={`${fmtMoney(sim.p10Final)} – ${fmtMoney(sim.p90Final)}`} />
             </dl>
+
+            <Exportar analysis={analysis} selectedOutcome={selectedOutcome} bankroll={bankroll} sim={sim} />
           </div>
         </div>
       </div>
