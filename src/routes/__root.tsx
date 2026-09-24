@@ -77,9 +77,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Edge Analytics" },
+      { title: "OddsEdge" },
       { name: "description", content: "Análisis de valor esperado para apuestas de fútbol." },
-      { name: "author", content: "Edge Analytics" },
+      { name: "author", content: "OddsEdge" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "theme-color", content: "#0A0A0B" },

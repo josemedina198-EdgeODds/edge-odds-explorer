@@ -5,7 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Edge Analytics design system.
+ * OddsEdge design system.
  * Strict neutral palette: near-black surfaces, off-white text, layered grays.
  * Single accent: muted emerald for positive value / primary actions.
  * Muted red reserved for negative value.

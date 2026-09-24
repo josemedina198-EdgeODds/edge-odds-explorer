@@ -2,6 +2,7 @@ import { OUTCOMES, fmtOdds, fmtPct, type MatchAnalysis, type Outcome } from "@/l
 import { SectionHeading } from "./SectionHeading";
 import { EvTag } from "./Matches";
 import { Check } from "lucide-react";
+import { MejorCuota } from "./MejorCuota";
 
 interface Props {
   analysis: MatchAnalysis;
@@ -79,6 +80,10 @@ export function ValorEsperado({ analysis, selectedOutcome, onSelectOutcome }: Pr
           Ninguna cuota de este partido supera al mercado. La calculadora no sugerirá apuesta.
         </p>
       )}
+
+      <div className="mt-6">
+        <MejorCuota analysis={analysis} />
+      </div>
     </section>
   );
 }
