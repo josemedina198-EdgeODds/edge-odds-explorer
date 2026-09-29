@@ -152,7 +152,7 @@ export function initials(name: string): string {
 }
 
 /** Turn raw API events into analysis inputs with consensus + best odds. */
-export function mapEvents(events: ApiEvent[], limit = 6): AnalysisInput[] {
+export function mapEvents(events: ApiEvent[], limit = 20): AnalysisInput[] {
   const now = Date.now();
   const out: AnalysisInput[] = [];
 
