@@ -78,7 +78,7 @@ function leagueMeta(l: Sport) {
   const [name, country] = l.title.split(" - ");
   return {
     code: hit?.[1] ?? l.title.slice(0, 2).toUpperCase(),
-    country: country ?? hit?.[2] ?? "",
+    country: hit?.[2] ?? country ?? "",
     name: name ?? l.title,
   };
 }
@@ -225,7 +225,7 @@ function OddsButton({
       </span>
       <span className={`tabular text-[15px] font-semibold leading-none ${oddsColor}`}>{fmtOdds(oa.odds)}</span>
       <span
-        className={`tabular inline-flex items-center gap-0.5 text-[10px] font-semibold leading-none ${
+        className={`tabular inline-flex items-center gap-0.5 whitespace-nowrap text-[10px] font-semibold leading-none ${
           active ? "opacity-80" : pos ? "text-positive" : "text-negative/70"
         }`}
       >
