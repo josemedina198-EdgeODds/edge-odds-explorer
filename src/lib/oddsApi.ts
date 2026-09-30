@@ -116,16 +116,43 @@ export async function fetchSoccerSports(): Promise<Sport[]> {
     .sort((a, b) => a.title.localeCompare(b.title, "es"));
 }
 
-export async function fetchOdds(sportKey: string): Promise<ApiEvent[]> {
-  return get<ApiEvent[]>(`/sports/${sportKey}/odds/`, {
-    regions: "us",
+export type Region = "eu" | "uk" | "us" | "au";
+export const REGIONS: Region[] = ["eu", "uk", "us", "au"];
+
+export async function fetchOdds(sportKey: string, regions: Region[]): Promise<ApiEvent[]> {
+  const data = await get<ApiEvent[]>(`/sports/${sportKey}/odds/`, {
+    regions: regions.join(","),
     markets: "h2h",
     oddsFormat: "decimal",
   });
+  addCredits(regions.length);
+  return data;
+}
+
+/* ---------- Local credit estimate ---------- */
+
+const monthKey = () => new Date().toISOString().slice(0, 7);
+
+export function readCredits(): number {
+  const c = readCache<{ month: string; used: number }>("credits");
+  return c && c.data.month === monthKey() ? c.data.used : 0;
+}
+
+function addCredits(n: number) {
+  writeCache("credits", { month: monthKey(), used: readCredits() + n });
+}
+
+/** Decimal odds; converts American format if it slipped through. */
+export function toDecimal(price: number): number {
+  if (price >= 100) return price / 100 + 1;
+  if (price <= -100) return 100 / Math.abs(price) + 1;
+  return price;
 }
 
 export async function fetchScores(sportKey: string): Promise<ScoreEvent[]> {
-  return get<ScoreEvent[]>(`/sports/${sportKey}/scores/`, { daysFrom: "3" });
+  const data = await get<ScoreEvent[]>(`/sports/${sportKey}/scores/`, { daysFrom: "1" });
+  addCredits(2);
+  return data;
 }
 
 /* ---------- Mapping & aggregation ---------- */
@@ -170,7 +197,8 @@ export function mapEvents(events: ApiEvent[], limit = 20): AnalysisInput[] {
       const h2h = bk.markets?.find((m) => m.key === "h2h");
       if (!h2h) continue;
       let used = false;
-      for (const o of h2h.outcomes ?? []) {
+      for (const raw of h2h.outcomes ?? []) {
+        const o = { name: raw.name, price: toDecimal(raw.price) };
         const key: Outcome | null =
           o.name === ev.home_team ? "home" : o.name === ev.away_team ? "away" : o.name === "Draw" ? "draw" : null;
         if (!key || !Number.isFinite(o.price) || o.price <= 1) continue;
