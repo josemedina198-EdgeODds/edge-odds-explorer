@@ -31,7 +31,10 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
-  const { inputs, finished, leagues, league, source, updatedAt, loading, error, refresh, selectLeague } =
+  const {
+    inputs, finished, leagues, league, source, updatedAt, loading, error, refresh, selectLeague,
+    region, combine, credits, selectRegion, setCombine,
+  } =
     useOddsData();
 
   const analyses = useMemo(() => analyzeAll(inputs), [inputs]);
