@@ -1,3 +1,4 @@
+import { TeamFlag } from "@/lib/flags";
 import { useMemo } from "react";
 import { KELLY_CAP, fmtMoney, fmtOdds, fmtPct, simulateKelly, type MatchAnalysis, type Outcome } from "@/lib/model";
 import { SectionHeading } from "./SectionHeading";
@@ -37,7 +38,7 @@ export function Calculadora({ analysis, selectedOutcome, bankroll, onBankroll }:
           <div className="card-edge flex flex-col p-6 md:p-8">
             <p className="eyebrow">Selección</p>
             <p className="mt-2 text-sm font-semibold">
-              {home.name} <span className="text-subtle-foreground">vs</span> {away.name}
+              <span className="inline-flex items-center gap-2"><TeamFlag name={home.name} />{home.name}</span> <span className="text-subtle-foreground">vs</span> <span className="inline-flex items-center gap-2"><TeamFlag name={away.name} />{away.name}</span>
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <span className="rounded-md border border-border bg-surface px-2 py-0.5 text-xs font-bold text-foreground">

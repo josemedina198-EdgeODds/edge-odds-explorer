@@ -1,3 +1,4 @@
+import { TeamFlag } from "@/lib/flags";
 import { OUTCOMES, fmtPct, type MatchAnalysis, type Outcome } from "@/lib/model";
 import { SectionHeading } from "./SectionHeading";
 import { Crest } from "./Matches";
@@ -29,7 +30,7 @@ export function Comparador({ analysis, selectedOutcome, onSelectOutcome, onAnaly
               <Crest short={home.short} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold">
-                  {home.name} <span className="text-subtle-foreground">vs</span> {away.name}
+                  <span className="inline-flex items-center gap-2"><TeamFlag name={home.name} />{home.name}</span> <span className="text-subtle-foreground">vs</span> <span className="inline-flex items-center gap-2"><TeamFlag name={away.name} />{away.name}</span>
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   Resultado más probable{" "}

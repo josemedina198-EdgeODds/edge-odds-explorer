@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarX, Flame, RefreshCw, Search } from "lucide-react";
+import { CalendarX, Flame, RefreshCw, Search, SearchX } from "lucide-react";
+import { COUNTRY_NAMES, Flag, TEAM_NAMES, TeamFlag, isMultinational, leagueFlag, normalize, teamFlag } from "@/lib/flags";
+import type { Region } from "@/lib/oddsApi";
 import { OUTCOMES, fmtEv, fmtOdds, type MatchAnalysis, type Outcome } from "@/lib/model";
 import { readCache, type Sport } from "@/lib/oddsApi";
 import type { DataSource } from "@/hooks/useOddsData";
@@ -18,6 +20,11 @@ interface Props {
   loading: boolean;
   error: string | null;
   onRefresh: () => void;
+  region: Region;
+  onRegion: (r: Region) => void;
+  combine: boolean;
+  onCombine: (v: boolean) => void;
+  credits: number;
 }
 
 export function Crest({ short }: { short: string }) {
@@ -76,22 +83,76 @@ const LEAGUE_CODES: [RegExp, string, string][] = [
 function leagueMeta(l: Sport) {
   const hit = LEAGUE_CODES.find(([re]) => re.test(l.key));
   const [name, country] = l.title.split(" - ");
+  const flag = leagueFlag(l.key);
   return {
     code: hit?.[1] ?? l.title.slice(0, 2).toUpperCase(),
+    flag,
     country: hit?.[2] ?? country ?? "",
     name: name ?? l.title,
   };
 }
 
-function LeagueDot({ code, active }: { code: string; active?: boolean }) {
+
+function EmptySearch({ query }: { query: string }) {
   return (
-    <span
-      className={`grid size-7 shrink-0 place-items-center rounded-full border text-[10px] font-bold tracking-wide ${
-        active ? "border-primary/50 bg-primary/10 text-primary" : "border-border-strong bg-surface text-muted-foreground"
-      }`}
-    >
-      {code}
-    </span>
+    <div className="flex items-center gap-2 px-4 py-6 text-xs text-subtle-foreground">
+      <SearchX className="size-4 shrink-0" />
+      Sin resultados para '{query}'.
+    </div>
+  );
+}
+
+function RegionControls({
+  region,
+  onRegion,
+  combine,
+  onCombine,
+  credits,
+}: Pick<Props, "region" | "onRegion" | "combine" | "onCombine" | "credits">) {
+  const regions: Region[] = ["eu", "uk", "us", "au"];
+  return (
+    <div className="mt-3 space-y-2.5">
+      <div className="grid grid-cols-4 gap-1 rounded-lg border border-border bg-surface p-0.5" role="radiogroup" aria-label="Región de casas">
+        {regions.map((r) => {
+          const on = !combine && r === region;
+          return (
+            <button
+              key={r}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              onClick={() => onRegion(r)}
+              className={`rounded-md py-1 text-[11px] font-semibold uppercase tracking-wider transition-colors ${
+                on ? "bg-card text-foreground shadow-card" : "text-subtle-foreground hover:text-muted-foreground"
+              }`}
+            >
+              {r}
+            </button>
+          );
+        })}
+      </div>
+      <label className="flex cursor-pointer items-center justify-between gap-2 text-[12px] text-muted-foreground">
+        Combinar regiones
+        <input
+          type="checkbox"
+          checked={combine}
+          onChange={(e) => onCombine(e.target.checked)}
+          className="size-3.5 accent-[var(--color-primary)]"
+        />
+      </label>
+      {combine && <p className="text-[11px] text-subtle-foreground">Esto usa 4 créditos por actualización.</p>}
+      <p
+        className={`tabular text-[11px] ${
+          credits >= 490 ? "text-negative" : credits >= 450 ? "text-amber-600 dark:text-amber-400" : "text-subtle-foreground"
+        }`}
+      >
+        {credits >= 490
+          ? "Créditos casi agotados: considera rotar la key o esperar al mes que viene."
+          : credits >= 450
+            ? `Te quedan ~${500 - credits} créditos este mes`
+            : `Créditos usados este mes (estimado): ${credits} / 500`}
+      </p>
+    </div>
   );
 }
 
@@ -236,12 +297,10 @@ function OddsButton({
   );
 }
 
-function TeamLine({ name, short }: { name: string; short: string }) {
+function TeamLine({ name }: { name: string; short: string }) {
   return (
     <div className="flex min-w-0 items-center gap-2.5">
-      <span className="grid size-6 shrink-0 place-items-center rounded-full border border-border-strong bg-surface text-[9px] font-bold text-muted-foreground">
-        {short.slice(0, 3)}
-      </span>
+      <TeamFlag name={name} />
       <span className="truncate text-sm font-medium">{name}</span>
     </div>
   );
@@ -319,6 +378,11 @@ export function Matches({
   loading,
   error,
   onRefresh,
+  region,
+  onRegion,
+  combine,
+  onCombine,
+  credits,
 }: Props) {
   const [tab, setTab] = useState<Tab>("all");
   const [query, setQuery] = useState("");
@@ -333,22 +397,54 @@ export function Matches({
   useEffect(() => {
     const next: Record<string, number> = {};
     for (const l of leagues) {
-      const c = readCache<{ inputs: AnalysisInput[] }>(`odds:${l.key}`);
+      const c = readCache<{ inputs: AnalysisInput[] }>(`odds_${l.key}_${combine ? "all" : region}`);
       if (c?.data.inputs.length) next[l.key] = c.data.inputs.length;
     }
     next[league] = analyses.length;
     setCounts(next);
-  }, [leagues, league, analyses.length, updatedAt]);
+  }, [leagues, league, analyses.length, updatedAt, region, combine]);
 
   const visibleLeagues = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const list = q ? leagues.filter((l) => l.title.toLowerCase().includes(q)) : leagues;
-    if (q) return list;
-    const top = list.slice(0, 10);
-    const cur = leagues.find((l) => l.key === league);
-    if (cur && !top.includes(cur)) top.push(cur);
-    return top;
-  }, [leagues, query, league]);
+    const q = normalize(query);
+    if (!q) {
+      const top = leagues.slice(0, 10);
+      const cur = leagues.find((l) => l.key === league);
+      if (cur && !top.includes(cur)) top.push(cur);
+      return top.map((l) => ({ l, hint: "" }));
+    }
+    const staticTeams = TEAM_NAMES.filter((t) => normalize(t).includes(q));
+    const teamCountries = new Map<string, string>();
+    for (const t of staticTeams) {
+      const c = teamFlag(t);
+      if (c && !teamCountries.has(c)) teamCountries.set(c, t);
+    }
+    const countryHit = q.length >= 3
+      ? Object.entries(COUNTRY_NAMES).filter(([, n]) => normalize(n).includes(q)).map(([c, n]) => [c, n.split(" ")[0]!] as const)
+      : [];
+    const out: { l: Sport; hint: string; score: number }[] = [];
+    for (const l of leagues) {
+      const m = leagueMeta(l);
+      const flag = m.flag;
+      if (normalize(`${l.title} ${m.name} ${l.key.replace(/_/g, " ")}`).includes(q)) {
+        out.push({ l, hint: "", score: 0 });
+        continue;
+      }
+      const known = readCache<string[]>(`teams_${l.key}`)?.data ?? [];
+      const cachedTeam = known.find((t) => normalize(t).includes(q));
+      const domesticCountry = countryHit.find(([c]) => c === flag);
+      if (domesticCountry) { out.push({ l, hint: "", score: 0 }); continue; }
+      if (cachedTeam) { out.push({ l, hint: cachedTeam, score: isMultinational(flag) ? 2 : 1 }); continue; }
+      if (flag && teamCountries.has(flag)) { out.push({ l, hint: teamCountries.get(flag)!, score: 1 }); continue; }
+      if (flag === "eu" && (teamCountries.size || countryHit.some(([c]) => c !== "eu"))) {
+        const hint = teamCountries.values().next().value ?? countryHit[0]![1];
+        out.push({ l, hint, score: 2 });
+        continue;
+      }
+      const countryTeam = known.find((t) => countryHit.some(([c]) => teamFlag(t) === c));
+      if (countryTeam) out.push({ l, hint: countryTeam, score: 2 });
+    }
+    return out.sort((a, b) => a.score - b.score);
+  }, [leagues, query, league, updatedAt]);
 
   const current = leagues.find((l) => l.key === league);
   const meta = current ? leagueMeta(current) : { code: "—", country: "", name: "Liga" };
@@ -404,14 +500,15 @@ export function Matches({
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar liga"
-                aria-label="Buscar liga"
+                placeholder="Buscar liga, equipo o país…"
+                aria-label="Buscar liga, equipo o país"
                 className="w-full bg-transparent text-[13px] text-foreground outline-none placeholder:text-subtle-foreground"
               />
             </label>
+            <RegionControls region={region} onRegion={onRegion} combine={combine} onCombine={onCombine} credits={credits} />
           </div>
           <nav className="max-h-[640px] overflow-y-auto py-1">
-            {visibleLeagues.map((l) => {
+            {visibleLeagues.map(({ l, hint }) => {
               const m = leagueMeta(l);
               const active = l.key === league;
               return (
@@ -425,9 +522,16 @@ export function Matches({
                       : "hover:bg-surface"
                   }`}
                 >
-                  <LeagueDot code={m.code} active={active} />
-                  <span className={`min-w-0 flex-1 truncate text-[13px] ${active ? "font-semibold" : "text-muted-foreground"}`}>
-                    {m.name}
+                  <Flag code={m.flag} name={m.name} size="md" />
+                  <span className="min-w-0 flex-1">
+                    <span className={`block truncate text-[13px] ${active ? "font-semibold" : "text-muted-foreground"}`}>
+                      {m.name}
+                    </span>
+                    {hint && (
+                      <span className="mt-0.5 inline-block max-w-full truncate rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                        Coincide: {hint}
+                      </span>
+                    )}
                   </span>
                   {counts[l.key] !== undefined && (
                     <span className="tabular rounded-md bg-surface px-1.5 py-0.5 text-[10px] font-semibold text-subtle-foreground">
@@ -437,13 +541,26 @@ export function Matches({
                 </button>
               );
             })}
-            {!visibleLeagues.length && <p className="px-4 py-6 text-xs text-subtle-foreground">Sin coincidencias.</p>}
+            {!visibleLeagues.length && <EmptySearch query={query} />}
           </nav>
         </aside>
 
         {/* Chips (mobile) */}
-        <div className="flex gap-2 overflow-x-auto border-b border-border p-3 md:hidden">
-          {leagues.map((l) => {
+        <div className="space-y-3 border-b border-border p-3 md:hidden">
+          <label className="flex h-9 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-muted-foreground">
+            <Search className="size-3.5 shrink-0" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar liga, equipo o país…"
+              aria-label="Buscar liga, equipo o país"
+              className="w-full bg-transparent text-[13px] text-foreground outline-none placeholder:text-subtle-foreground"
+            />
+          </label>
+          <RegionControls region={region} onRegion={onRegion} combine={combine} onCombine={onCombine} credits={credits} />
+        <div className="flex gap-2 overflow-x-auto">
+          {!visibleLeagues.length && <EmptySearch query={query} />}
+          {(query ? visibleLeagues : leagues.map((l) => ({ l, hint: "" }))).map(({ l, hint }) => {
             const m = leagueMeta(l);
             const active = l.key === league;
             return (
@@ -455,18 +572,20 @@ export function Matches({
                   active ? "border-primary/50 bg-surface-raised font-semibold" : "border-border text-muted-foreground"
                 }`}
               >
-                <LeagueDot code={m.code} active={active} />
+                <Flag code={m.flag} name={m.name} size="md" />
                 {m.name}
+                {hint && <span className="text-[10px] text-primary">· {hint}</span>}
               </button>
             );
           })}
+        </div>
         </div>
 
         {/* Main */}
         <div className="min-w-0">
           <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border-b border-border px-4 py-4">
             <div className="flex min-w-0 items-center gap-3">
-              <LeagueDot code={meta.code} active />
+              <Flag code={current ? leagueMeta(current).flag : null} name={meta.name} size="lg" />
               <div className="min-w-0">
                 <h3 className="truncate text-base font-semibold">{meta.name}</h3>
                 <p className="truncate text-xs text-subtle-foreground">
