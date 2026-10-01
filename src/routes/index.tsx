@@ -108,6 +108,11 @@ function Index() {
           loading={loading}
           error={error}
           onRefresh={refresh}
+          region={region}
+          onRegion={selectRegion}
+          combine={combine}
+          onCombine={setCombine}
+          credits={credits}
         />
         <Resultados finished={finished} predictions={predictions} />
         {analysis && (
