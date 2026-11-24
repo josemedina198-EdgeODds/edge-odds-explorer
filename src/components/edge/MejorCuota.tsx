@@ -1,39 +1,10 @@
-import { OUTCOMES, fmtOdds, type MatchAnalysis } from "@/lib/model";
+import { OUTCOMES, fmtOdds, fmtEv, type MatchAnalysis } from '@/lib/model';
+import { Ayuda } from './Ayuda';
 
 export function MejorCuota({ analysis }: { analysis: MatchAnalysis }) {
-  const best = analysis.match.bestOdds;
-  const enough = best && (analysis.match.bookmakerCount ?? 0) > 1;
-
-  return (
-    <div className="card-edge p-5 md:p-6">
-      <p className="eyebrow">Mejor cuota disponible</p>
-      {!enough ? (
-        <p className="mt-3 text-sm text-muted-foreground">Datos insuficientes.</p>
-      ) : (
-        <ul className="mt-4 divide-y divide-border">
-          {OUTCOMES.map((o) => {
-            const oa = analysis.outcomes[o];
-            const b = best[o];
-            const better = b.odds > oa.odds;
-            return (
-              <li key={o} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
-                <div className="flex min-w-0 items-center gap-3">
-                  <span className="grid size-7 shrink-0 place-items-center rounded-md border border-border bg-surface text-[11px] font-bold text-muted-foreground">
-                    {oa.code}
-                  </span>
-                  <span className="truncate text-sm">{b.book || "—"}</span>
-                </div>
-                <div className="flex shrink-0 items-baseline gap-2">
-                  <span className="tabular text-xs text-subtle-foreground">consenso {fmtOdds(oa.odds)}</span>
-                  <span className={`tabular text-base font-semibold ${better ? "text-positive" : ""}`}>
-                    {fmtOdds(b.odds)}
-                  </span>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
-  );
+  const { bestOdds: best, bookmakers: books } = analysis.match;
+  return <div className="border-y border-border py-6"><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="flex items-center text-lg font-semibold">Mejor cuota disponible<Ayuda topic="cuota" /></h3><a href="https://www.the-odds-api.com/sports-odds-data/bookmaker-apis.html" target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline underline-offset-4">Directorio de casas del proveedor ↗</a></div><p className="mt-2 text-sm leading-relaxed text-muted-foreground">Cuotas decimales reales recibidas de The Odds API. La mediana es el consenso; el máximo es una alternativa de pago, no arbitraje garantizado.</p>
+    {!best ? <p className="mt-4 text-sm text-muted-foreground">Datos insuficientes: esta selección no contiene cuotas reales por casa. No se inventan comparaciones para los ejemplos Demo.</p> : <><div className="mt-5 grid gap-5 sm:grid-cols-3">{OUTCOMES.map(o => <div key={o}><p className="text-xs text-muted-foreground">{analysis.outcomes[o].code} · {analysis.outcomes[o].label}</p><p className="mt-1 tabular text-2xl font-semibold text-primary">{fmtOdds(best[o].odds)}</p><p className="mt-1 text-xs font-medium">{best[o].book}</p><p className="mt-2 text-xs text-muted-foreground">Consenso {fmtOdds(analysis.outcomes[o].odds)} · valor al máximo {fmtEv(analysis.outcomes[o].modelProb * best[o].odds - 1)}</p></div>)}</div>{(analysis.match.bookmakerCount ?? 0) < 2 && <p className="mt-4 text-xs text-muted-foreground">Solo hay una casa: no es posible contrastar precios.</p>}
+    {books?.length ? <div className="mt-6 overflow-x-auto"><table className="w-full min-w-[480px] text-left text-sm"><caption className="mb-3 text-left text-xs text-muted-foreground">Todas las casas recibidas para este partido · 1 / X / 2</caption><thead className="border-y border-border text-xs text-muted-foreground"><tr><th className="py-3 font-medium">Casa de apuestas</th><th className="text-right font-medium">1</th><th className="text-right font-medium">X</th><th className="text-right font-medium">2</th><th className="text-right font-medium">Actualización de la casa</th></tr></thead><tbody>{books.map(b => <tr key={b.key} className="border-b border-border"><td className="py-3 font-medium">{b.title}</td>{OUTCOMES.map(o => { const price = b.odds[o]; return <td key={o} className={`tabular text-right ${price === best[o].odds ? 'font-semibold text-positive' : ''}`}>{price === undefined ? '—' : fmtOdds(price)}</td>; })}<td className="text-right text-xs text-muted-foreground">{b.updatedAt ? new Date(b.updatedAt).toLocaleString('es-CO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'No informada'}</td></tr>)}</tbody></table></div> : <p className="mt-4 text-xs text-muted-foreground">La respuesta guardada antigua no incluye el desglose: actualiza cuotas para consultarlo.</p>}</>}
+    <p className="mt-4 text-xs leading-relaxed text-muted-foreground">No todas las casas publican todas las ligas o resultados. Verifica disponibilidad, reglas 1X2, autorización local y cuota vigente en la casa; esta app no coloca apuestas. Una respuesta guardada puede estar desactualizada.</p></div>;
 }

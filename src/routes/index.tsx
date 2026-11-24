@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { analyzeAll, OUTCOMES, type Outcome } from "@/lib/model";
+import { OUTCOMES, type Outcome } from "@/lib/model";
 import { useOddsData } from "@/hooks/useOddsData";
 import { readPredictions, savePredictions, type PredictionMap } from "@/lib/predictions";
 import { Header } from "@/components/edge/Header";
@@ -10,11 +10,15 @@ import { Resultados } from "@/components/edge/Resultados";
 import { Comparador } from "@/components/edge/Comparador";
 import { ValorEsperado } from "@/components/edge/ValorEsperado";
 import { Calculadora } from "@/components/edge/Calculadora";
+import { usePythonAnalysis } from "@/hooks/usePythonAnalysis";
+import { Guia } from "@/components/edge/Guia";
+import { Actualizacion } from "@/components/edge/Actualizacion";
+import { Button } from "@/components/ui/button";
 import { Footer } from "@/components/edge/Footer";
 
-const TITLE = "OddsEdge — Valor esperado en apuestas de fútbol";
+const TITLE = "OddsEdge — Simulador Python de apuestas y escenarios en COP";
 const DESCRIPTION =
-  "Compara tu modelo de probabilidad con las cuotas reales del mercado, detecta valor esperado positivo y calcula cuánto apostar.";
+  "Compara cuotas reales de fútbol entre casas y explora escenarios de ganancias y pérdidas en COP con Python, Monte Carlo y decisiones multicriterio.";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -33,11 +37,11 @@ export const Route = createFileRoute("/")({
 function Index() {
   const {
     inputs, finished, leagues, league, source, updatedAt, loading, error, refresh, selectLeague,
-    region, combine, credits, selectRegion, setCombine,
+    region, combine, credits, selectRegion, setCombine, autoRefresh, setAutoRefresh,
   } =
     useOddsData();
 
-  const analyses = useMemo(() => analyzeAll(inputs), [inputs]);
+  const { analyses, loading: pythonLoading, error: pythonError, retry } = usePythonAnalysis(inputs);
 
   const bestOverall = useMemo(() => {
     let best = { matchId: analyses[0]?.match.id ?? "", outcome: "home" as Outcome, ev: -Infinity };
@@ -49,7 +53,7 @@ function Index() {
 
   const [selectedMatch, setSelectedMatch] = useState(bestOverall.matchId);
   const [selectedOutcome, setSelectedOutcome] = useState<Outcome>(bestOverall.outcome);
-  const [bankroll, setBankroll] = useState(100);
+  const [bankroll, setBankroll] = useState(100000);
   const [runKey, setRunKey] = useState(0);
   const [predictions, setPredictions] = useState<PredictionMap>({});
 
@@ -71,7 +75,7 @@ function Index() {
     setPredictions(readPredictions());
   }, [analyses]);
 
-  const analysis = (analyses.find((a) => a.match.id === selectedMatch) ?? analyses[0])!;
+  const analysis = (analyses.find((a) => a.match.id === selectedMatch) ?? analyses[0]);
 
   const positiveCount = analyses.reduce(
     (n, a) => n + OUTCOMES.filter((o) => a.outcomes[o].ev > 0).length,
@@ -98,6 +102,10 @@ function Index() {
           positiveCount={positiveCount}
           bestEv={Math.max(0, bestOverall.ev === -Infinity ? 0 : bestOverall.ev)}
         />
+        <Guia />
+        <Actualizacion enabled={autoRefresh} onEnabled={setAutoRefresh} combine={combine} credits={credits} error={error} />
+        {pythonLoading && <p role="status" className="container-edge py-6 text-sm text-muted-foreground">Preparando Python y calculando probabilidades… La primera carga puede tardar unos segundos.</p>}
+        {pythonError && <div role="alert" className="container-edge py-6"><p className="text-sm text-negative">{pythonError}</p><Button variant="outline" className="mt-3" onClick={retry}>Reintentar Python</Button></div>}
         <Matches
           analyses={analyses}
           selectedMatch={selectedMatch}
@@ -108,7 +116,7 @@ function Index() {
           onLeague={selectLeague}
           source={source}
           updatedAt={updatedAt}
-          loading={loading}
+          loading={loading || pythonLoading}
           error={error}
           onRefresh={refresh}
           region={region}

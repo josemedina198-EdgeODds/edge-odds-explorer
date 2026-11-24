@@ -19,6 +19,13 @@ export interface BestOdds {
   book: string;
 }
 
+export interface BookmakerQuote {
+  key: string;
+  title: string;
+  updatedAt?: string;
+  odds: Partial<Record<Outcome, number>>;
+}
+
 export interface AnalysisInput {
   id: string;
   league: string;
@@ -30,6 +37,7 @@ export interface AnalysisInput {
   /** Highest odds available per outcome with the bookmaker name (live only). */
   bestOdds?: Record<Outcome, BestOdds>;
   bookmakerCount?: number;
+  bookmakers?: BookmakerQuote[];
   /** Team keys into the demo dataset; when present the model uses recent form. */
   formKeys?: { home: string; away: string };
 }
@@ -116,8 +124,9 @@ export function runModel(
   teams = TEAMS,
   avg = leagueAverages(teams),
 ): ModelResult {
-  const h = teams[formKeys.home]!;
-  const a = teams[formKeys.away]!;
+  const h = teams[formKeys.home];
+  const a = teams[formKeys.away];
+  if (!h || !a) throw new Error("Equipo sin estadísticas");
 
   const homeStrength: Strengths = {
     attack: h.home.goalsFor / h.home.played / avg.homeGoals,
@@ -148,9 +157,11 @@ export function fitLambdas(fair: Record<Outcome, number>): { lambdaHome: number;
   let bestPair = { lambdaHome: 1.4, lambdaAway: 1.1 };
 
   for (let hi = 0; hi < grid.length; hi++) {
-    const pH = pmfs[hi]!;
+    const pH = pmfs[hi];
+    if (!pH) continue;
     for (let ai = 0; ai < grid.length; ai++) {
-      const pA = pmfs[ai]!;
+      const pA = pmfs[ai];
+      if (!pA) continue;
       let home = 0,
         draw = 0,
         away = 0;
@@ -169,23 +180,16 @@ export function fitLambdas(fair: Record<Outcome, number>): { lambdaHome: number;
         (home / t - fair.home) ** 2 + (draw / t - fair.draw) ** 2 + (away / t - fair.away) ** 2;
       if (err < bestErr) {
         bestErr = err;
-        bestPair = { lambdaHome: grid[hi]!, lambdaAway: grid[ai]! };
+        bestPair = { lambdaHome: grid[hi] ?? 1.4, lambdaAway: grid[ai] ?? 1.1 };
       }
     }
   }
   return bestPair;
 }
 
-/** Baseline expected goals used to temper extreme market estimates. */
-const BASELINE_HOME = 1.45;
-const BASELINE_AWAY = 1.15;
-const SHRINK = 0.12;
-
 export function runMarketModel(fair: Record<Outcome, number>): ModelResult {
   const fitted = fitLambdas(fair);
-  const lambdaHome =
-    (fitted.lambdaHome * (1 - SHRINK) + BASELINE_HOME * SHRINK) * HOME_ADVANTAGE ** 0.25;
-  const lambdaAway = fitted.lambdaAway * (1 - SHRINK) + BASELINE_AWAY * SHRINK;
+  const { lambdaHome, lambdaAway } = fitted;
   const { probs, mostLikelyScore } = outcomeProbs(lambdaHome, lambdaAway);
   return { lambdaHome, lambdaAway, probs, mostLikelyScore, source: "market" };
 }
@@ -279,8 +283,9 @@ export function analyzeMatch(input: AnalysisInput): MatchAnalysis {
 /** Demo dataset mapped into the generic input shape. */
 export function demoInputs(): AnalysisInput[] {
   return MATCHES.map((m) => {
-    const h = TEAMS[m.home]!;
-    const a = TEAMS[m.away]!;
+    const h = TEAMS[m.home];
+    const a = TEAMS[m.away];
+    if (!h || !a) throw new Error("Equipo demo sin estadísticas");
     return {
       id: m.id,
       league: m.league,
@@ -375,7 +380,7 @@ export function simulateKelly(opts: {
   const medianPath: number[] = new Array(bets + 1);
   const col = new Float64Array(sims);
   for (let i = 0; i <= bets; i++) {
-    for (let s = 0; s < sims; s++) col[s] = allPaths[s]![i]!;
+    for (let s = 0; s < sims; s++) col[s] = allPaths[s]?.[i] ?? 0;
     const sorted = Float64Array.from(col).sort();
     medianPath[i] = sorted[Math.floor(sims / 2)] ?? 0;
   }
@@ -402,3 +407,24 @@ export const fmtOdds = (x: number) => x.toFixed(2);
 export const fmtEv = (x: number) => `${x >= 0 ? "+" : ""}${(x * 100).toFixed(1)}%`;
 export const fmtMoney = (x: number) =>
   new Intl.NumberFormat("es-ES", { maximumFractionDigits: x < 10 ? 2 : 0 }).format(x);
+
+export const fmtCOP = (x: number) =>
+  new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(x);
+
+export interface PythonSimulation extends SimulationResult {
+  probLoss: number;
+  probEven: number;
+  outcomeCounts: Record<Outcome, number>;
+  histogram: { low: number; high: number; count: number }[];
+}
+
+export interface DecisionResult {
+  branches: { outcome: Outcome; prob: number; net: number; gross: number; final: number }[];
+  expectedNet: number;
+  ev: number;
+  stake: number;
+  canCompare: boolean;
+  recommendation: "evaluar" | "no_apostar";
+  ranking: { outcome: Outcome | "none"; ev: number; prob: number; fraction: number; odds: number; score: number }[];
+  weights: number[];
+}

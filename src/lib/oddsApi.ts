@@ -4,7 +4,7 @@
  * good response before dropping to the demo dataset.
  */
 
-import type { AnalysisInput, BestOdds, Outcome } from "./model";
+import type { AnalysisInput, BestOdds, BookmakerQuote, Outcome } from "./model";
 
 const BASE = "https://api.the-odds-api.com/v4";
 const KEY = import.meta.env["VITE_ODDS_API_KEY"] as string | undefined;
@@ -21,6 +21,7 @@ export interface Sport {
 interface ApiBookmaker {
   key: string;
   title: string;
+  last_update?: string;
   markets: { key: string; outcomes: { name: string; price: number }[] }[];
 }
 
@@ -161,7 +162,7 @@ function median(xs: number[]): number {
   const s = [...xs].sort((a, b) => a - b);
   const mid = Math.floor(s.length / 2);
   if (s.length === 0) return 0;
-  return s.length % 2 ? s[mid]! : ((s[mid - 1]! + s[mid]!) / 2);
+  return s.length % 2 ? (s[mid] ?? 0) : ((s[mid - 1] ?? 0) + (s[mid] ?? 0)) / 2;
 }
 
 export function initials(name: string): string {
@@ -170,10 +171,10 @@ export function initials(name: string): string {
     .split(/\s+/)
     .filter((w) => w.length > 1 && !/^(fc|cf|ac|sc|de|del|la|el|the|club)$/i.test(w));
   const base = words.length ? words : name.split(/\s+/);
-  if (base.length === 1) return base[0]!.slice(0, 3).toUpperCase();
+  if (base.length === 1) return (base[0] ?? name).slice(0, 3).toUpperCase();
   return base
     .slice(0, 3)
-    .map((w) => w[0]!)
+    .map((w) => w[0] ?? "")
     .join("")
     .toUpperCase();
 }
@@ -192,21 +193,24 @@ export function mapEvents(events: ApiEvent[], limit = 20): AnalysisInput[] {
       away: { odds: 0, book: "" },
     };
     let books = 0;
+    const bookmakers: BookmakerQuote[] = [];
 
     for (const bk of ev.bookmakers ?? []) {
       const h2h = bk.markets?.find((m) => m.key === "h2h");
       if (!h2h) continue;
       let used = false;
+      const quote: BookmakerQuote = { key: bk.key, title: bk.title, odds: {}, ...(bk.last_update ? { updatedAt: bk.last_update } : {}) };
       for (const raw of h2h.outcomes ?? []) {
-        const o = { name: raw.name, price: toDecimal(raw.price) };
+        const o = { name: raw.name, price: raw.price };
         const key: Outcome | null =
           o.name === ev.home_team ? "home" : o.name === ev.away_team ? "away" : o.name === "Draw" ? "draw" : null;
         if (!key || !Number.isFinite(o.price) || o.price <= 1) continue;
         buckets[key].push(o.price);
+        quote.odds[key] = o.price;
         if (o.price > best[key].odds) best[key] = { odds: o.price, book: bk.title };
         used = true;
       }
-      if (used) books++;
+      if (used) { books++; bookmakers.push(quote); }
     }
 
     if (!buckets.home.length || !buckets.draw.length || !buckets.away.length) continue;
@@ -224,6 +228,7 @@ export function mapEvents(events: ApiEvent[], limit = 20): AnalysisInput[] {
       },
       bestOdds: best,
       bookmakerCount: books,
+      bookmakers,
     });
   }
 

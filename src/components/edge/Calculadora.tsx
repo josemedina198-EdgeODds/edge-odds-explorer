@@ -1,214 +1,74 @@
-import { TeamFlag } from "@/lib/flags";
-import { useMemo } from "react";
-import { KELLY_CAP, fmtMoney, fmtOdds, fmtPct, simulateKelly, type MatchAnalysis, type Outcome } from "@/lib/model";
-import { SectionHeading } from "./SectionHeading";
-import { EvTag } from "./Matches";
-import { Exportar } from "./Exportar";
+import { useEffect, useMemo, useState } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, BarChart, Bar } from 'recharts';
+import { LoaderCircle } from 'lucide-react';
+import { TeamFlag } from '@/lib/flags';
+import { fmtCOP, fmtOdds, fmtPct, type MatchAnalysis, type Outcome, type PythonSimulation, type DecisionResult } from '@/lib/model';
+import { runPython } from '@/lib/pythonEngine';
+import { Button } from '@/components/ui/button';
+import { SectionHeading } from './SectionHeading';
+import { Ayuda } from './Ayuda';
+import { Decisiones } from './Decisiones';
+import { Exportar } from './Exportar';
 
-interface Props {
-  analysis: MatchAnalysis;
-  selectedOutcome: Outcome;
-  bankroll: number;
-  onBankroll: (v: number) => void;
-}
+interface Props { analysis: MatchAnalysis; selectedOutcome: Outcome; bankroll: number; onBankroll: (v: number) => void; }
+const compactCOP = (value: number) => new Intl.NumberFormat('es-CO', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
 
 export function Calculadora({ analysis, selectedOutcome, bankroll, onBankroll }: Props) {
   const oa = analysis.outcomes[selectedOutcome];
-  const stake = bankroll * oa.kelly;
-  const home = analysis.match.home;
-  const away = analysis.match.away;
+  const [useBest, setUseBest] = useState(true);
+  const [mode, setMode] = useState<'kelly' | 'custom'>('kelly');
+  const [customPct, setCustomPct] = useState(1);
+  const [bets, setBets] = useState(100);
+  const [weights, setWeights] = useState([40, 30, 30]);
+  const [state, setState] = useState<{ sim: PythonSimulation; decision: DecisionResult } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
+  const best = analysis.match.bestOdds?.[selectedOutcome];
+  const odds = useBest && best ? best.odds : oa.odds;
 
-  const sim = useMemo(
-    () => simulateKelly({ bankroll: Math.max(bankroll, 0), p: oa.modelProb, odds: oa.odds, fraction: oa.kelly }),
-    [bankroll, oa.modelProb, oa.odds, oa.kelly],
-  );
+  useEffect(() => {
+    let active = true;
+    setBusy(true);
+    setState(null);
+    const timer = window.setTimeout(() => {
+      const currentEv = oa.modelProb * odds - 1;
+      const base = odds > 1 ? Math.min(.25, Math.max(0, currentEv / (odds - 1))) : 0;
+      const fraction = mode === 'kelly' ? base * .25 : customPct / 100;
+      const simOpts = { bankroll, probs: analysis.model.probs, odds, fraction, bets, outcome: selectedOutcome };
+      const decisionOpts = { analysis, bankroll, outcome: selectedOutcome, odds, fraction, weights, useBest };
+      void Promise.all([runPython<PythonSimulation>({ kind: 'simulate', opts: simOpts }), runPython<DecisionResult>({ kind: 'decision', opts: decisionOpts })]).then(([sim, decision]) => {
+        if (active) { setState({ sim, decision }); setError(null); setBusy(false); }
+      }).catch(() => { if (active) { setError('No se pudo calcular el escenario en Python. Vuelve a intentarlo.'); setBusy(false); } });
+    }, 120);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [analysis, oa.modelProb, odds, bankroll, selectedOutcome, mode, customPct, bets, weights, useBest, retry]);
 
-  const pct = Math.min(100, Math.max(0, (bankroll / 1000) * 100));
-
-  return (
-    <section id="calculadora" className="border-t border-border bg-card/40">
-      <div className="container-edge py-20 md:py-24">
-        <SectionHeading
-          eyebrow="Calculadora"
-          title="Cuánto apostar y qué esperar."
-          text="Ajusta tu banca. La apuesta sugerida y la simulación se recalculan al instante para la cuota seleccionada."
-        />
-
-        <div className="mt-10 grid gap-6 lg:grid-cols-[1fr_1.5fr]">
-          <div className="card-edge flex flex-col p-6 md:p-8">
-            <p className="eyebrow">Selección</p>
-            <p className="mt-2 text-sm font-semibold">
-              <span className="inline-flex items-center gap-2"><TeamFlag name={home.name} />{home.name}</span> <span className="text-subtle-foreground">vs</span> <span className="inline-flex items-center gap-2"><TeamFlag name={away.name} />{away.name}</span>
-            </p>
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-              <span className="rounded-md border border-border bg-surface px-2 py-0.5 text-xs font-bold text-foreground">
-                {oa.code}
-              </span>
-              <span>{oa.label}</span>
-              <span className="text-subtle-foreground">·</span>
-              <span className="tabular">cuota {fmtOdds(oa.odds)}</span>
-              <EvTag ev={oa.ev} />
-            </div>
-
-            <div className="mt-8">
-              <div className="flex items-center justify-between">
-                <label htmlFor="bankroll" className="text-sm font-medium">
-                  Banca
-                </label>
-                <div className="flex items-center rounded-md border border-border-strong bg-surface">
-                  <input
-                    id="bankroll"
-                    type="number"
-                    min={0}
-                    max={1000}
-                    value={bankroll}
-                    onChange={(e) => onBankroll(clamp(Number(e.target.value)))}
-                    className="tabular w-24 bg-transparent px-3 py-1.5 text-right text-sm font-semibold outline-none"
-                  />
-                  <span className="pr-3 text-xs text-subtle-foreground">u</span>
-                </div>
-              </div>
-              <input
-                type="range"
-                min={0}
-                max={1000}
-                step={5}
-                value={bankroll}
-                onChange={(e) => onBankroll(Number(e.target.value))}
-                aria-label="Banca"
-                className="range-edge mt-4"
-                style={{ ["--range-progress" as string]: `${pct}%` }}
-              />
-              <div className="mt-2 flex justify-between text-[11px] tabular text-subtle-foreground">
-                <span>0</span>
-                <span>500</span>
-                <span>1000</span>
-              </div>
-            </div>
-
-            <div className="mt-8 rounded-xl border border-border bg-surface p-5">
-              <p className="text-[11px] font-medium uppercase tracking-wider text-subtle-foreground">Apuesta sugerida</p>
-              <p className={`mt-2 tabular text-5xl font-semibold tracking-tight ${stake > 0 ? "text-positive" : "text-muted-foreground"}`}>
-                {fmtMoney(stake)}
-                <span className="ml-1 text-lg font-medium text-subtle-foreground">u</span>
-              </p>
-              <p className="mt-2 text-xs text-muted-foreground">
-                {stake > 0 ? (
-                  <>
-                    {fmtPct(oa.kelly)} de tu banca
-                    {oa.kelly >= KELLY_CAP && <> · límite de seguridad {fmtPct(KELLY_CAP, 0)}</>}
-                  </>
-                ) : (
-                  "Sin valor en esta cuota: no se recomienda apostar."
-                )}
-              </p>
-            </div>
-
-            <dl className="mt-6 grid grid-cols-2 gap-4 text-sm">
-              <Kv label="Ganancia si acierta" value={`+${fmtMoney(stake * (oa.odds - 1))} u`} />
-              <Kv label="Pérdida si falla" value={`−${fmtMoney(stake)} u`} />
-            </dl>
-          </div>
-
-          <div className="card-edge p-6 md:p-8">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <div>
-                <p className="eyebrow">Simulación</p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {sim.sims.toLocaleString("es-ES")} series de {sim.bets} apuestas con esta cuota y esta apuesta.
-                </p>
-              </div>
-              <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                <span className="flex items-center gap-2">
-                  <span className="h-px w-5 bg-primary" /> Mediana
-                </span>
-                <span className="flex items-center gap-2">
-                  <span className="h-px w-5 bg-chart-market" /> Series
-                </span>
-              </div>
-            </div>
-
-            <div className="mt-6">
-              <PathsChart sim={sim} start={bankroll} />
-            </div>
-
-            <dl className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border md:grid-cols-4">
-              <StatBox label="Banca final mediana" value={`${fmtMoney(sim.medianFinal)} u`} tone={sim.medianFinal > bankroll ? "pos" : sim.medianFinal < bankroll ? "neg" : undefined} />
-              <StatBox label="Prob. de beneficio" value={fmtPct(sim.probProfit, 0)} tone={sim.probProfit > 0.5 ? "pos" : undefined} />
-              <StatBox label="Caída máx. típica" value={`−${fmtPct(sim.medianMaxDrawdown, 0)}`} tone={sim.medianMaxDrawdown > 0 ? "neg" : undefined} />
-              <StatBox label="Rango 10–90 %" value={`${fmtMoney(sim.p10Final)} – ${fmtMoney(sim.p90Final)}`} />
-            </dl>
-
-            <Exportar analysis={analysis} selectedOutcome={selectedOutcome} bankroll={bankroll} sim={sim} />
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function clamp(v: number) {
-  if (Number.isNaN(v)) return 0;
-  return Math.min(1000, Math.max(0, v));
-}
-
-function Kv({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-[11px] text-subtle-foreground">{label}</dt>
-      <dd className="tabular mt-1 font-medium">{value}</dd>
+  return <section id="calculadora" className="border-t border-border bg-card/40"><div className="container-edge py-14 md:py-20"><SectionHeading eyebrow="Simulador monetario · Python" title="Tu banca, tus posibles escenarios." text="Introduce un presupuesto en COP. Explora lo que ocurre si aciertas, si empatan o si falla tu resultado, y observa el riesgo a lo largo de una serie." />
+    <div className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]"><div className="min-w-0 space-y-6">
+      <div className="border-b border-border pb-5"><p className="eyebrow">Tu selección</p><p className="mt-2 flex flex-wrap items-center gap-2 text-sm font-semibold"><TeamFlag name={analysis.match.home.name} />{analysis.match.home.name}<span className="text-muted-foreground">vs</span><TeamFlag name={analysis.match.away.name} />{analysis.match.away.name}</p><p className="mt-3 text-sm">{oa.code} · {oa.label}<Ayuda topic="empate" /></p></div>
+      <div><label htmlFor="quote-mode" className="flex items-center text-sm font-medium">Cuota de la simulación<Ayuda topic="cuota" /></label><select id="quote-mode" className="mt-2 h-10 w-full rounded-md border border-input bg-surface px-3 text-sm" value={useBest && best ? 'best' : 'consensus'} onChange={e => setUseBest(e.target.value === 'best')}><option value="consensus">Consenso · {fmtOdds(oa.odds)}</option>{best && <option value="best">{best.book} · {fmtOdds(best.odds)} (máxima)</option>}</select><p className="mt-2 text-xs leading-relaxed text-muted-foreground">Es la cuota recibida, no una oferta reservada. Elige la misma cuota que usarías al apostar.</p></div>
+      <div><label htmlFor="bankroll" className="flex items-center text-sm font-medium">Banca en pesos colombianos<Ayuda topic="banca" /></label><div className="mt-2 flex items-center rounded-md border border-input bg-surface"><span className="pl-3 text-sm text-muted-foreground">$</span><input id="bankroll" type="number" min={0} max={10000000} step={1000} value={bankroll} onChange={e => onBankroll(Math.min(10000000, Math.max(0, Number(e.target.value) || 0)))} className="tabular min-w-0 w-full bg-transparent px-3 py-2 text-lg font-semibold outline-none" /><span className="pr-3 text-xs text-muted-foreground">COP</span></div><input type="range" aria-label="Banca en COP" min={0} max={1000000} step={1000} value={Math.min(bankroll, 1000000)} onChange={e => onBankroll(Number(e.target.value))} className="mt-4 w-full accent-primary" /><p className="mt-1 text-xs text-muted-foreground">Deslizador: hasta $1.000.000 COP. Entrada: hasta $10.000.000 COP.</p></div>
+      <div><p className="flex items-center text-sm font-medium">Importe por apuesta<Ayuda topic="kelly" /></p><div className="mt-2 flex flex-wrap gap-2"><Button variant={mode === 'kelly' ? 'default' : 'outline'} size="sm" aria-pressed={mode === 'kelly'} onClick={() => setMode('kelly')}>Kelly reducido</Button><Button variant={mode === 'custom' ? 'default' : 'outline'} size="sm" aria-pressed={mode === 'custom'} onClick={() => setMode('custom')}>Personalizada</Button></div>{mode === 'custom' && <div className="mt-4"><label htmlFor="risk-pct" className="flex justify-between text-xs"><span>Fracción de banca por apuesta</span><span>{customPct}%</span></label><input id="risk-pct" type="range" min={0} max={25} step={.25} value={customPct} onChange={e => setCustomPct(Number(e.target.value))} className="mt-3 w-full accent-primary" /><p className="mt-1 text-xs text-negative">Escenario exploratorio, no recomendación. Arriesgar más puede acelerar las pérdidas.</p></div>}</div>
+      <div><label htmlFor="bets" className="flex items-center text-sm font-medium">Apuestas por serie<Ayuda topic="montecarlo" /></label><select id="bets" value={bets} onChange={e => setBets(Number(e.target.value))} className="mt-2 h-10 w-full rounded-md border border-input bg-surface px-3 text-sm">{[20, 50, 100, 200].map(n => <option key={n} value={n}>{n} apuestas hipotéticas</option>)}</select></div>
+      {state && <div className="border-y border-border py-5"><p className="text-xs text-muted-foreground">{mode === 'kelly' ? 'Apuesta orientativa inicial' : 'Apuesta personalizada inicial'}</p><p className={`mt-2 tabular text-3xl font-semibold ${state.decision.stake > 0 ? 'text-primary' : 'text-muted-foreground'}`}>{fmtCOP(state.decision.stake)} <span className="text-sm">COP</span></p><p className="mt-2 text-xs leading-relaxed text-muted-foreground">{state.decision.stake === 0 ? 'Sin apuesta: la banca permanece igual. Cambia a Personalizada solo si quieres explorar el riesgo.' : 'La misma fracción se recalcula sobre la banca restante en cada paso.'}</p><dl className="mt-4 space-y-3 text-sm"><MoneyRow label="Retorno bruto si aciertas" value={state.decision.stake * odds} /><MoneyRow label="Ganancia neta si aciertas" value={state.decision.stake * (odds - 1)} /><MoneyRow label="Pérdida si falla (incluye empate no elegido)" value={-state.decision.stake} /></dl><div className="mt-2 flex items-center text-xs text-muted-foreground">Qué significa cada importe<Ayuda topic="retorno" /></div></div>}
     </div>
-  );
+    <div className="min-w-0" aria-busy={busy}>{busy && <p role="status" className="flex min-h-12 items-center gap-2 text-sm text-muted-foreground"><LoaderCircle className="size-4 animate-spin" />Python está recalculando los escenarios…</p>}{error && <div role="alert"><p className="text-sm text-negative">{error}</p><Button className="mt-3" variant="outline" onClick={() => setRetry(v => v + 1)}>Reintentar cálculo</Button></div>}
+      {state && <><SimulationCharts sim={state.sim} start={bankroll} /><dl className="mt-6 grid grid-cols-2 gap-x-5 gap-y-5 border-y border-border py-5 sm:grid-cols-3"><Stat label="Banca final mediana" value={`${fmtCOP(state.sim.medianFinal)} COP`} /><Stat label="Prob. de beneficio" value={fmtPct(state.sim.probProfit)} /><Stat label="Prob. de pérdida" value={fmtPct(state.sim.probLoss)} /><Stat label="Sin cambio monetario" value={fmtPct(state.sim.probEven)} /><Stat label="Caída máxima típica" value={fmtPct(state.sim.medianMaxDrawdown)} /><Stat label="Rango final 10–90%" value={`${fmtCOP(state.sim.p10Final)} – ${fmtCOP(state.sim.p90Final)} COP`} /></dl><div className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground"><span>Mediana y rango<Ayuda topic="mediana" /></span><span>Caída máxima<Ayuda topic="caida" /></span></div><Decisiones decision={state.decision} analysis={analysis} selectedOutcome={selectedOutcome} weights={weights} onWeights={setWeights} /><Exportar analysis={analysis} selectedOutcome={selectedOutcome} bankroll={bankroll} sim={state.sim} decision={state.decision} odds={odds} mode={mode} /></>}
+    </div></div><p className="mt-8 border-l-2 border-negative pl-4 text-xs leading-relaxed text-muted-foreground">Las cuotas son datos observados; las probabilidades y cifras monetarias son estimaciones. Repetimos un escenario con cuota y probabilidad constantes e independencia entre apuestas: no una cartera real de partidos. No se incluyen impuestos, comisiones ni apuestas anuladas.</p>
+  </div></section>;
 }
+function MoneyRow({ label, value }: { label: string; value: number }) { return <div className="flex flex-wrap items-baseline justify-between gap-2"><dt className="text-xs text-muted-foreground">{label}</dt><dd className={`tabular font-medium ${value < 0 ? 'text-negative' : 'text-foreground'}`}>{fmtCOP(value)} COP</dd></div>; }
+function Stat({ label, value }: { label: string; value: string }) { return <div className="min-w-0"><dt className="text-[11px] leading-relaxed text-muted-foreground">{label}</dt><dd className="mt-1.5 break-words tabular text-sm font-semibold">{value}</dd></div>; }
 
-function StatBox({ label, value, tone }: { label: string; value: string; tone?: "pos" | "neg" | undefined }) {
-  return (
-    <div className="bg-card p-4">
-      <dt className="text-[11px] text-subtle-foreground">{label}</dt>
-      <dd className={`tabular mt-1.5 text-base font-semibold tracking-tight ${tone === "pos" ? "text-positive" : tone === "neg" ? "text-negative" : ""}`}>
-        {value}
-      </dd>
-    </div>
-  );
-}
-
-function PathsChart({ sim, start }: { sim: ReturnType<typeof simulateKelly>; start: number }) {
-  const W = 640;
-  const H = 260;
-  const pad = { top: 12, right: 12, bottom: 28, left: 52 };
-  const innerW = W - pad.left - pad.right;
-  const innerH = H - pad.top - pad.bottom;
-
-  // Log scale so a few runaway series don't flatten the rest.
-  const lg = (v: number) => Math.log(Math.max(v, 0.01));
-  const all = sim.paths.flat().concat(sim.medianPath);
-  const minV = lg(Math.min(...all, start));
-  const maxV = Math.max(lg(Math.max(...all, start * 1.1)), minV + 0.1);
-  const x = (i: number) => pad.left + (i / sim.bets) * innerW;
-  const y = (v: number) => pad.top + innerH - ((lg(v) - minV) / (maxV - minV)) * innerH;
-  const line = (p: number[]) => p.map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
-  const ticks = Array.from({ length: 4 }, (_, i) => Math.exp(minV + ((maxV - minV) / 3) * i));
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Simulación de banca">
-      {ticks.map((t) => (
-        <g key={t}>
-          <line x1={pad.left} x2={W - pad.right} y1={y(t)} y2={y(t)} stroke="var(--color-border)" strokeDasharray="2 4" />
-          <text x={pad.left - 8} y={y(t) + 4} textAnchor="end" fontSize="11" fill="var(--color-subtle-foreground)">
-            {fmtMoney(t)}
-          </text>
-        </g>
-      ))}
-      <line x1={pad.left} x2={W - pad.right} y1={y(start)} y2={y(start)} stroke="var(--color-border-strong)" />
-      {sim.paths.map((p, i) => (
-        <path key={i} d={line(p)} fill="none" stroke="var(--color-chart-market)" strokeWidth={1} opacity={0.35} />
-      ))}
-      <path d={line(sim.medianPath)} fill="none" stroke="var(--color-primary)" strokeWidth={2.2} />
-      {[0, 25, 50, 75, 100].map((n) => (
-        <text key={n} x={x(n)} y={H - 8} textAnchor="middle" fontSize="11" fill="var(--color-subtle-foreground)">
-          {n}
-        </text>
-      ))}
-    </svg>
-  );
+function SimulationCharts({ sim, start }: { sim: PythonSimulation; start: number }) {
+  const [scale, setScale] = useState<'linear' | 'log'>('linear');
+  const data = useMemo(() => sim.medianPath.map((median, i) => {
+    const row: Record<string, number> = { bet: i, median };
+    sim.paths.forEach((p, j) => { row[`path${j}`] = p[i] ?? 0; });
+    return row;
+  }), [sim]);
+  const tickFormat = (n: number) => compactCOP(n);
+  return <div className="space-y-8"><figure><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center"><h3 className="text-lg font-semibold">Monte Carlo · Evolución de la banca</h3><Ayuda topic="montecarlo" /></div><div className="flex gap-1"><Button variant={scale === 'linear' ? 'secondary' : 'ghost'} size="sm" onClick={() => setScale('linear')}>Lineal</Button><Button variant={scale === 'log' ? 'secondary' : 'ghost'} size="sm" disabled={start === 0} onClick={() => setScale('log')}>Logarítmica</Button></div></div><p className="mt-2 text-xs text-muted-foreground">Banca en COP · {sim.sims.toLocaleString('es-CO')} series de {sim.bets} apuestas.</p><div className="mt-4 flex flex-wrap gap-4 text-xs text-muted-foreground"><span className="flex items-center gap-2"><span className="h-0.5 w-5 bg-primary" />Mediana</span><span className="flex items-center gap-2"><span className="h-0.5 w-5 bg-chart-market" />40 series de ejemplo</span></div><div className="mt-4 h-[280px] w-full min-w-0" role="img" aria-label="Gráfica Monte Carlo: banca en COP por número de apuestas"><ResponsiveContainer width="100%" height="100%"><LineChart data={data} margin={{ top: 8, right: 8, bottom: 16, left: 0 }}><CartesianGrid stroke="var(--border)" strokeDasharray="3 5" /><XAxis dataKey="bet" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} label={{ value: 'Número de apuestas', position: 'insideBottom', offset: -12, fill: 'var(--muted-foreground)', fontSize: 11 }} /><YAxis width={58} stroke="var(--muted-foreground)" fontSize={10} tickFormatter={tickFormat} scale={scale === 'log' && start > 0 ? 'log' : 'linear'} domain={scale === 'log' && start > 0 ? ['auto', 'auto'] : [0, 'auto']} /><Tooltip content={({ active, payload, label }) => { const median = payload?.find(p => p.dataKey === 'median')?.value; return active && typeof median === 'number' ? <div className="rounded-md border border-border bg-popover p-3 text-xs shadow-card"><p>Apuesta {label}</p><p className="mt-1 text-primary">Mediana: {fmtCOP(median)} COP</p></div> : null; }} />{sim.paths.map((_, i) => <Line key={i} type="linear" dataKey={`path${i}`} stroke="var(--chart-market)" strokeWidth={1} strokeOpacity={.3} dot={false} isAnimationActive={false} />)}<Line type="linear" dataKey="median" name="Mediana" stroke="var(--primary)" strokeWidth={2.5} dot={false} animationDuration={500} /></LineChart></ResponsiveContainer></div><figcaption className="mt-3 text-xs leading-relaxed text-muted-foreground">Cada línea gris es una serie hipotética, no un partido futuro. La verde resume el punto medio de las 1.000 series en cada paso. {scale === 'log' && start > 0 ? 'La escala logarítmica compara cambios proporcionales, no incrementos iguales de pesos.' : 'La escala lineal compara incrementos iguales de pesos; series extremas pueden comprimir las demás.'} Si la apuesta es $0, todas las líneas coinciden.</figcaption></figure>
+    <figure><h3 className="text-base font-semibold">Distribución de la banca final</h3><p className="mt-2 text-xs text-muted-foreground">Horizontal: intervalos de banca en COP. Vertical: número de series que terminaron en cada intervalo.</p><div className="mt-4 h-[210px] w-full min-w-0" role="img" aria-label="Distribución de las mil bancas finales simuladas"><ResponsiveContainer width="100%" height="100%"><BarChart data={sim.histogram} margin={{ top: 8, right: 8, bottom: 10, left: 0 }}><CartesianGrid stroke="var(--border)" vertical={false} strokeDasharray="3 5" /><XAxis dataKey="low" tickFormatter={tickFormat} stroke="var(--muted-foreground)" fontSize={10} minTickGap={35} /><YAxis width={42} allowDecimals={false} fontSize={10} stroke="var(--muted-foreground)" /><Tooltip content={({ active, payload }) => { const bin = payload?.[0]?.payload as { low: number; high: number; count: number } | undefined; return active && bin ? <div className="rounded-md border border-border bg-popover p-3 text-xs shadow-card"><p>{fmtCOP(bin.low)} – {fmtCOP(bin.high)} COP</p><p className="mt-1">{bin.count} series</p></div> : null; }} /><Bar dataKey="count" fill="var(--chart-market)" radius={[3, 3, 0, 0]} animationDuration={500} /></BarChart></ResponsiveContainer></div><figcaption className="mt-3 text-xs leading-relaxed text-muted-foreground">Esta distribución incluye las 1.000 series; no solo las 40 líneas mostradas arriba. Una barra alta indica un intervalo frecuente en la simulación, no un resultado seguro.</figcaption></figure></div>;
 }

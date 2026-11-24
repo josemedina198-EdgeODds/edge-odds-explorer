@@ -13,7 +13,7 @@ self.onmessage = async (event: MessageEvent<{ id: number; payload: unknown }>) =
   try {
     const py = await runtime;
     // Dispatch is synchronous; no globals are shared across concurrent async calls.
-    const dispatch = py.globals.get('dispatch');
+    const dispatch = py.globals['get']('dispatch');
     try {
       const result = JSON.parse(dispatch(JSON.stringify(payload)) as string) as unknown;
       self.postMessage({ id, result });

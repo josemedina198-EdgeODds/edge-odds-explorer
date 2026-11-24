@@ -77,10 +77,13 @@ export function useOddsData() {
     error: null,
     credits: 0,
   });
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const requestId = useRef(0);
   const stateRef = useRef(state);
   stateRef.current = state;
 
   const load = useCallback(async (league: string, region: Region, combine: boolean, force: boolean) => {
+    const job = ++requestId.current;
     const key = oddsCacheKey(league, regionTag(region, combine));
     const cached = readCache<CachedLeague>(key);
     const base = { league, region, combine };
@@ -115,7 +118,9 @@ export function useOddsData() {
 
     setState((s) => ({ ...s, ...base, loading: true, error: null }));
 
-    const fallback = (message: string) =>
+    const fallback = (message: string) => {
+      if (job !== requestId.current) return;
+      setAutoRefresh(false);
       setState((s) => ({
         ...s,
         ...base,
@@ -127,16 +132,20 @@ export function useOddsData() {
         error: cached?.data.inputs.length ? message.replace("Mostrando datos demo.", "Mostrando datos guardados.") : message,
         credits: readCredits(),
       }));
+    };
 
     try {
       const events = await fetchOdds(league, combine ? REGIONS : [region]);
       const inputs = mapEvents(events);
-      let finished: FinishedMatch[] = [];
-      try {
-        finished = mapScores(await fetchScores(league));
-      } catch {
-        /* scores are optional */
+      const cachedScores = readCache<FinishedMatch[]>(`scores_${league}`);
+      let finished: FinishedMatch[] = cachedScores?.data ?? [];
+      if (!cachedScores || Date.now() - cachedScores.at >= FRESH_MS) {
+        try {
+          finished = mapScores(await fetchScores(league));
+          writeCache(`scores_${league}`, finished);
+        } catch { /* Scores are optional; preserve the last successful result. */ }
       }
+      if (job !== requestId.current) return;
       if (!inputs.length) {
         fallback("No hay partidos próximos en esta liga y región. Mostrando datos demo.");
         return;
@@ -192,5 +201,15 @@ export function useOddsData() {
     void load(s.league, s.region, combine, false);
   }, [load]);
 
-  return { ...state, refresh, selectLeague, selectRegion, setCombine };
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const timer = window.setInterval(() => {
+      const current = stateRef.current;
+      if (readCredits() >= 490 || current.error) { setAutoRefresh(false); return; }
+      if (document.visibilityState === "visible" && !current.loading) refresh();
+    }, 60_000);
+    return () => window.clearInterval(timer);
+  }, [autoRefresh, refresh]);
+
+  return { ...state, refresh, selectLeague, selectRegion, setCombine, autoRefresh, setAutoRefresh };
 }
