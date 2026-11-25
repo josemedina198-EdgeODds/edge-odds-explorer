@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Trophy } from "lucide-react";
 
 /** Lowercase, strip accents and extra spaces. */
@@ -58,7 +57,8 @@ export const TEAM_NAMES: string[] = Object.keys(RAW_TEAMS);
 
 export function teamFlag(name: string): string | null {
   const n = normalize(name);
-  if (TEAM_FLAGS[n]) return TEAM_FLAGS[n]!;
+  const exact = TEAM_FLAGS[n];
+  if (exact) return exact;
   for (const [k, v] of Object.entries(TEAM_FLAGS)) {
     if (k.length >= 4 && (n.startsWith(k + " ") || n.endsWith(" " + k) || k.startsWith(n + " "))) return v;
   }
@@ -98,40 +98,17 @@ export function leagueFlag(key: string): string | null {
 
 export const isMultinational = (code: string | null) => code === "eu" || code === "cup";
 
-const SIZES = { sm: "size-5", md: "size-7", lg: "size-8" } as const;
+const SIZES = { sm: "h-4 w-6", md: "h-5 w-7", lg: "h-6 w-8" } as const;
+// Bundled vector flags show the full design without network-dependent circular crops.
+const FLAG_ASSETS = import.meta.glob('/node_modules/flag-icons/flags/4x3/*.svg', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 
-export function Flag({
-  code,
-  name,
-  size = "sm",
-}: {
-  code: string | null;
-  name: string;
-  size?: keyof typeof SIZES;
-}) {
-  const [broken, setBroken] = useState(false);
-  const cls = `${SIZES[size]} shrink-0 overflow-hidden rounded-full border border-border-strong bg-surface`;
-  if (code === "cup")
-    return (
-      <span className={`${cls} grid place-items-center text-primary`} title={name}>
-        <Trophy className="size-3/5" />
-      </span>
-    );
-  if (!code || broken)
-    return (
-      <span className={`${cls} grid place-items-center text-[10px] font-bold text-muted-foreground`} title={name}>
-        {name.trim().charAt(0).toUpperCase()}
-      </span>
-    );
-  return (
-    <img
-      src={`https://flagcdn.com/w40/${code}.png`}
-      alt={name}
-      loading="lazy"
-      onError={() => setBroken(true)}
-      className={`${cls} object-cover`}
-    />
-  );
+export function Flag({ code, name, size = "sm" }: { code: string | null; name: string; size?: keyof typeof SIZES }) {
+  const cls = `${SIZES[size]} inline-block shrink-0 self-center overflow-hidden rounded-sm border border-border-strong bg-surface align-middle`;
+  const url = code ? FLAG_ASSETS[`/node_modules/flag-icons/flags/4x3/${code}.svg`] : undefined;
+  const country = code ? COUNTRY_NAMES[code] : undefined;
+  if (code === "cup") return <span className={`${cls} inline-grid place-items-center text-primary`} title={name}><Trophy className="size-3" /></span>;
+  if (!url) return <span className={`${cls} inline-grid place-items-center text-[10px] font-bold text-muted-foreground`} title={name}>{name.trim().charAt(0).toUpperCase()}</span>;
+  return <img src={url} alt={country ?? name} title={country ?? name} className={`${cls} object-contain`} />;
 }
 
 export function TeamFlag({ name, size = "sm" }: { name: string; size?: keyof typeof SIZES }) {

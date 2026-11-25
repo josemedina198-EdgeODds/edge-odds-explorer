@@ -9,7 +9,7 @@ export function Footer({ source }: { source: "live" | "cache" | "demo" }) {
             <Logo />
             <p className="mt-4 max-w-sm text-sm leading-relaxed text-muted-foreground">
               Compara tu modelo con el mercado y decide con números, no con intuición. Todos los
-              cálculos se ejecutan en tu navegador; ningún dato sale de tu dispositivo.
+              cálculos numéricos se ejecutan en Python en tu navegador. Se consulta The Odds API para obtener datos; tu banca no se envía a ese servicio.
             </p>
           </div>
           <div>
@@ -22,12 +22,15 @@ export function Footer({ source }: { source: "live" | "cache" | "demo" }) {
                   : "consenso (mediana) de las casas disponibles para cada partido."}
               </li>
               <li>Probabilidades del mercado sin el margen de la casa.</li>
-              <li>Los partidos en vivo se guardan en tu navegador para no gastar consultas.</li>
+              <li>Los datos guardados conservan su fecha; no son precios actuales.</li>
+              <li><a href="https://www.the-odds-api.com/liveapi/guides/v4/" target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-4">Documentación y cobertura de The Odds API ↗</a></li>
+              <li><a href="https://www.the-odds-api.com/sports-odds-data/update-intervals.html" target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-4">Frecuencia de actualización del proveedor ↗</a></li>
             </ul>
           </div>
           <div>
             <p className="eyebrow">Producto</p>
             <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
+              <li><a href="#guia" className="hover:text-foreground">Guía del simulador</a></li>
               <li><a href="#partidos" className="hover:text-foreground">Partidos</a></li>
               <li><a href="#resultados" className="hover:text-foreground">Resultados</a></li>
               <li><a href="#comparador" className="hover:text-foreground">Comparador</a></li>

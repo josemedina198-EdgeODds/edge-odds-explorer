@@ -8,7 +8,7 @@ const NAV = [
   { label: "Comparador", href: "#comparador" },
   { label: "Valor Esperado", href: "#valor-esperado" },
   { label: "Calculadora", href: "#calculadora" },
-  { label: "Referencias", href: "#referencias" },
+  { label: "Guía", href: "#guia" },
 ];
 
 export function Logo() {

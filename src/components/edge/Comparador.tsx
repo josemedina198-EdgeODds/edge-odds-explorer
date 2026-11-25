@@ -1,145 +1,18 @@
-import { TeamFlag } from "@/lib/flags";
-import { OUTCOMES, fmtPct, type MatchAnalysis, type Outcome } from "@/lib/model";
-import { SectionHeading } from "./SectionHeading";
-import { Crest } from "./Matches";
-import { RefreshCw } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList } from 'recharts';
+import { ArrowDown } from 'lucide-react';
+import { TeamFlag } from '@/lib/flags';
+import { OUTCOMES, fmtPct, type MatchAnalysis, type Outcome } from '@/lib/model';
+import { Button } from '@/components/ui/button';
+import { Ayuda } from './Ayuda';
+import { SectionHeading } from './SectionHeading';
 
-interface Props {
-  analysis: MatchAnalysis;
-  selectedOutcome: Outcome;
-  onSelectOutcome: (o: Outcome) => void;
-  onAnalyze: () => void;
-  runKey: number;
-}
-
+interface Props { analysis: MatchAnalysis; selectedOutcome: Outcome; onSelectOutcome: (o: Outcome) => void; onAnalyze: () => void; runKey: number; }
 export function Comparador({ analysis, selectedOutcome, onSelectOutcome, onAnalyze, runKey }: Props) {
-  const home = analysis.match.home;
-  const away = analysis.match.away;
-
-  return (
-    <section id="comparador" className="border-y border-border bg-card/40">
-      <div className="container-edge py-20 md:py-24">
-        <div className="grid gap-12 lg:grid-cols-[1fr_1.4fr] lg:items-start">
-          <div>
-            <SectionHeading
-              eyebrow="Comparador"
-              title="Tu modelo frente al mercado."
-              text="Las barras muestran la probabilidad que asigna tu modelo a cada resultado junto a la probabilidad justa del mercado, ya sin el margen de la casa."
-            />
-            <div className="mt-8 flex items-center gap-3 rounded-xl border border-border bg-surface p-4">
-              <Crest short={home.short} />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">
-                  <span className="inline-flex items-center gap-2"><TeamFlag name={home.name} />{home.name}</span> <span className="text-subtle-foreground">vs</span> <span className="inline-flex items-center gap-2"><TeamFlag name={away.name} />{away.name}</span>
-                </p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Resultado más probable{" "}
-                  <span className="tabular font-medium text-foreground">
-                    {analysis.model.mostLikelyScore.home}–{analysis.model.mostLikelyScore.away}
-                  </span>{" "}
-                  · {fmtPct(analysis.model.mostLikelyScore.p)}
-                </p>
-              </div>
-              <Crest short={away.short} />
-            </div>
-
-            <div className="mt-6 flex items-center gap-5 text-xs text-muted-foreground">
-              <span className="flex items-center gap-2">
-                <span className="size-2.5 rounded-sm bg-chart-model" /> Tu modelo
-              </span>
-              <span className="flex items-center gap-2">
-                <span className="size-2.5 rounded-sm bg-chart-market" /> Mercado
-              </span>
-            </div>
-
-            <button
-              type="button"
-              onClick={onAnalyze}
-              className="mt-8 inline-flex h-11 items-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
-            >
-              <RefreshCw className="size-4" /> Analizar partido
-            </button>
-          </div>
-
-          <div className="card-edge p-6 md:p-8">
-            <GroupedBars analysis={analysis} selected={selectedOutcome} onSelect={onSelectOutcome} runKey={runKey} />
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function GroupedBars({
-  analysis,
-  selected,
-  onSelect,
-  runKey,
-}: {
-  analysis: MatchAnalysis;
-  selected: Outcome;
-  onSelect: (o: Outcome) => void;
-  runKey: number;
-}) {
-  const W = 600;
-  const H = 320;
-  const pad = { top: 24, right: 8, bottom: 56, left: 44 };
-  const innerW = W - pad.left - pad.right;
-  const innerH = H - pad.top - pad.bottom;
-  const maxP = Math.max(
-    0.5,
-    ...OUTCOMES.flatMap((o) => [analysis.outcomes[o].modelProb, analysis.outcomes[o].marketProb]),
-  );
-  const yMax = Math.ceil((maxP + 0.05) * 10) / 10;
-  const groupW = innerW / 3;
-  const barW = Math.min(64, groupW * 0.3);
-  const gap = 8;
-  const y = (p: number) => pad.top + innerH - (p / yMax) * innerH;
-  const ticks = Array.from({ length: 5 }, (_, i) => (yMax / 4) * i);
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Comparación de probabilidades">
-      {ticks.map((t) => (
-        <g key={t}>
-          <line x1={pad.left} x2={W - pad.right} y1={y(t)} y2={y(t)} stroke="var(--color-border)" strokeDasharray={t === 0 ? undefined : "2 4"} />
-          <text x={pad.left - 10} y={y(t) + 4} textAnchor="end" fontSize="11" fill="var(--color-subtle-foreground)" className="tabular">
-            {Math.round(t * 100)}%
-          </text>
-        </g>
-      ))}
-      {OUTCOMES.map((o, i) => {
-        const oa = analysis.outcomes[o];
-        const cx = pad.left + groupW * i + groupW / 2;
-        const xModel = cx - barW - gap / 2;
-        const xMarket = cx + gap / 2;
-        const isSel = selected === o;
-        const hasEdge = oa.edge > 0;
-        return (
-          <g key={o} onClick={() => onSelect(o)} className="cursor-pointer">
-            {isSel && (
-              <rect x={pad.left + groupW * i + 6} y={pad.top - 8} width={groupW - 12} height={innerH + 8 + 40} rx={10} fill="var(--color-surface)" />
-            )}
-            <g key={`${runKey}-${o}`} className="animate-bar" style={{ transformBox: "fill-box", animationDelay: `${i * 80}ms` }}>
-              <rect x={xModel} y={y(oa.modelProb)} width={barW} height={innerH - (y(oa.modelProb) - pad.top)} rx={4} fill="var(--color-chart-model)" opacity={hasEdge ? 1 : 0.55} />
-            </g>
-            <g key={`${runKey}-${o}-m`} className="animate-bar" style={{ transformBox: "fill-box", animationDelay: `${i * 80 + 60}ms` }}>
-              <rect x={xMarket} y={y(oa.marketProb)} width={barW} height={innerH - (y(oa.marketProb) - pad.top)} rx={4} fill="var(--color-chart-market)" />
-            </g>
-            <text x={xModel + barW / 2} y={y(oa.modelProb) - 8} textAnchor="middle" fontSize="12" fontWeight={600} fill="var(--color-foreground)" className="tabular">
-              {fmtPct(oa.modelProb)}
-            </text>
-            <text x={xMarket + barW / 2} y={y(oa.marketProb) - 8} textAnchor="middle" fontSize="12" fill="var(--color-muted-foreground)" className="tabular">
-              {fmtPct(oa.marketProb)}
-            </text>
-            <text x={cx} y={H - 30} textAnchor="middle" fontSize="13" fontWeight={600} fill={isSel ? "var(--color-foreground)" : "var(--color-muted-foreground)"}>
-              {oa.code} · {oa.label.length > 16 ? oa.label.slice(0, 15) + "…" : oa.label}
-            </text>
-            <text x={cx} y={H - 12} textAnchor="middle" fontSize="11" fontWeight={600} fill={hasEdge ? "var(--color-positive)" : "var(--color-subtle-foreground)"} className="tabular">
-              {hasEdge ? `Ventaja +${(oa.edge * 100).toFixed(1)} pts` : `Sin ventaja ${(oa.edge * 100).toFixed(1)} pts`}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
-  );
+  const { home, away } = analysis.match;
+  const data = OUTCOMES.map(o => ({ code: analysis.outcomes[o].code, model: analysis.outcomes[o].modelProb * 100, market: analysis.outcomes[o].marketProb * 100 }));
+  return <section id="comparador" className="border-y border-border bg-card/40"><div className="container-edge py-14 md:py-20"><div className="grid gap-8 lg:grid-cols-[1fr_1.4fr] lg:items-start"><div className="min-w-0"><SectionHeading eyebrow="Comparador" title="Probabilidad estimada frente al mercado." text="Compara los tres resultados: victoria local, empate y victoria visitante. Los porcentajes no son dinero y no garantizan que un resultado ocurra." />
+    <div className="mt-6 border-y border-border py-4"><div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm font-semibold"><span className="inline-flex min-w-0 items-center gap-2"><TeamFlag name={home.name} /><span>{home.name}</span></span><span className="text-muted-foreground">vs</span><span className="inline-flex min-w-0 items-center gap-2"><TeamFlag name={away.name} /><span>{away.name}</span></span></div><p className="mt-3 text-xs text-muted-foreground">Marcador con mayor probabilidad estimada: <span className="tabular font-medium text-foreground">{analysis.model.mostLikelyScore.home}–{analysis.model.mostLikelyScore.away}</span> · {fmtPct(analysis.model.mostLikelyScore.p)}. No es un marcador pronosticado con certeza.</p></div>
+    <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><span>Origen del modelo</span><Ayuda topic="modelo" /><span>Mercado sin margen</span><Ayuda topic="mercado" /></div>
+    <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{analysis.model.source === 'market' ? 'Python ajusta el modelo a las propias cuotas. No incorpora goles históricos, lesiones ni alineaciones. Las pequeñas diferencias del ajuste no prueban una ventaja real.' : 'Demo: probabilidades calculadas con estadísticas ficticias de goles. No son datos actuales.'}</p><Button onClick={onAnalyze} className="mt-6"><ArrowDown />Ver valor y casas</Button></div>
+    <figure className="min-w-0"><div className="flex flex-wrap gap-4 text-xs text-muted-foreground"><span className="flex items-center gap-2"><span className="size-2.5 rounded-sm bg-chart-model" />Estimación Python</span><span className="flex items-center gap-2"><span className="size-2.5 rounded-sm bg-chart-market" />Mercado sin margen</span></div><div className="mt-5 h-[300px] w-full min-w-0" role="img" aria-label="Barras de probabilidades del modelo y mercado para 1, X y 2"><ResponsiveContainer width="100%" height="100%"><BarChart key={runKey} data={data} margin={{ top: 22, right: 5, bottom: 0, left: 0 }} barGap={6}><CartesianGrid stroke="var(--border)" vertical={false} strokeDasharray="3 5" /><XAxis dataKey="code" fontSize={12} stroke="var(--muted-foreground)" tickLine={false} /><YAxis domain={[0, 100]} width={42} tickFormatter={(v: number) => `${v}%`} stroke="var(--muted-foreground)" fontSize={11} /><Tooltip content={({ active, payload, label }) => active && payload?.length ? <div className="rounded-md border border-border bg-popover p-3 text-xs shadow-card"><p className="font-semibold">Resultado {label}</p>{payload.map(p => <p key={String(p.dataKey)} className="mt-1">{p.dataKey === 'model' ? 'Estimación Python' : 'Mercado'}: {typeof p.value === 'number' ? `${p.value.toFixed(1)}%` : '—'}</p>)}</div> : null} /><Bar dataKey="model" fill="var(--chart-model)" radius={[3, 3, 0, 0]} animationDuration={500}><LabelList dataKey="model" position="top" fill="var(--foreground)" fontSize={11} formatter={(v: unknown) => typeof v === 'number' ? `${v.toFixed(1)}%` : ''} /></Bar><Bar dataKey="market" fill="var(--chart-market)" radius={[3, 3, 0, 0]} animationDuration={500}><LabelList dataKey="market" position="top" fill="var(--muted-foreground)" fontSize={11} formatter={(v: unknown) => typeof v === 'number' ? `${v.toFixed(1)}%` : ''} /></Bar></BarChart></ResponsiveContainer></div><div className="mt-3 grid grid-cols-3 gap-2">{OUTCOMES.map(o => <Button key={o} variant={selectedOutcome === o ? 'secondary' : 'ghost'} className="h-auto min-h-12 flex-col whitespace-normal px-1 py-2 text-xs" aria-pressed={selectedOutcome === o} onClick={() => onSelectOutcome(o)}><span>{analysis.outcomes[o].code} · {o === 'home' ? 'Local' : o === 'draw' ? 'Empate' : 'Visitante'}</span><span className="tabular text-[11px] text-muted-foreground">Diferencia {(analysis.outcomes[o].edge * 100).toFixed(1)} puntos</span></Button>)}</div><figcaption className="mt-4 text-xs leading-relaxed text-muted-foreground">Horizontal: 1 local, X empate y 2 visitante. Vertical: probabilidad de 0 a 100%. Verde y gris comparan el mismo resultado. La diferencia es en puntos porcentuales, no en COP ni en valor esperado; la ganancia depende también de la cuota que pague la casa.</figcaption></figure></div></div></section>;
 }

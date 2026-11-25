@@ -1,3 +1,4 @@
+import { Ayuda } from "./Ayuda";
 import { useEffect, useMemo, useState } from "react";
 import { CalendarX, Flame, RefreshCw, Search, SearchX } from "lucide-react";
 import { COUNTRY_NAMES, Flag, TEAM_NAMES, TeamFlag, isMultinational, leagueFlag, normalize, teamFlag } from "@/lib/flags";
@@ -216,9 +217,9 @@ function SourceInfo({
   onRefresh,
 }: Pick<Props, "source" | "updatedAt" | "loading" | "onRefresh">) {
   const live = source === "live";
-  const label = live ? "En vivo" : source === "cache" ? "Guardado" : "Demo";
+  const label = live ? "Cuotas reales" : source === "cache" ? "Guardado" : "Demo";
   return (
-    <div className="flex shrink-0 items-center gap-3">
+    <div className="flex flex-wrap items-center gap-2">
       <span
         className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wider ${
           live
@@ -230,7 +231,7 @@ function SourceInfo({
         {label}
       </span>
       {updatedAt && (
-        <span className="tabular hidden text-xs text-subtle-foreground sm:inline">
+        <span className="tabular text-[11px] text-muted-foreground">
           Actualizado: {fmtHour.format(new Date(updatedAt))}
         </span>
       )}
@@ -489,6 +490,7 @@ export function Matches({
       <div className="mb-6">
         <p className="eyebrow">Partidos</p>
         <h2 className="mt-2 text-2xl font-semibold tracking-tight md:text-3xl">Elige una cuota para analizarla.</h2>
+        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">Selecciona 1 (local), X (empate) o 2 (visitante) y baja al comparador. Los precios son cuotas decimales; el porcentaje inferior es valor esperado estimado, no dinero.<Ayuda topic="cuota" /></p>
       </div>
 
       <div className="card-edge overflow-hidden md:grid md:grid-cols-[272px_minmax(0,1fr)]">
@@ -583,7 +585,7 @@ export function Matches({
 
         {/* Main */}
         <div className="min-w-0">
-          <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border-b border-border px-4 py-4">
+          <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-4 py-4">
             <div className="flex min-w-0 items-center gap-3">
               <Flag code={current ? leagueMeta(current).flag : null} name={meta.name} size="lg" />
               <div className="min-w-0">

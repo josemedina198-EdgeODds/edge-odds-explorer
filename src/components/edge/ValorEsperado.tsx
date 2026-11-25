@@ -2,6 +2,7 @@ import { OUTCOMES, fmtOdds, fmtPct, type MatchAnalysis, type Outcome } from "@/l
 import { SectionHeading } from "./SectionHeading";
 import { EvTag } from "./Matches";
 import { Check } from "lucide-react";
+import { Ayuda } from "./Ayuda";
 import { MejorCuota } from "./MejorCuota";
 
 interface Props {
@@ -19,10 +20,11 @@ export function ValorEsperado({ analysis, selectedOutcome, onSelectOutcome }: Pr
       <SectionHeading
         eyebrow="Valor esperado"
         title="Cuánto vale cada cuota."
-        text="Beneficio esperado por cada unidad apostada, ordenado de mayor a menor. Solo las cuotas en verde superan al mercado."
+        text="Ganancia o pérdida media estimada como porcentaje de lo apostado, usando cuotas de consenso. Un valor positivo depende de que la probabilidad asumida sea correcta; no garantiza beneficio."
       />
 
-      <div className="card-edge mt-10 overflow-hidden">
+      <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-muted-foreground"><span>Valor esperado<Ayuda topic="ev" /></span><span>Cuota decimal<Ayuda topic="cuota" /></span><span>Probabilidad del mercado<Ayuda topic="mercado" /></span></div>
+      <div className="card-edge mt-6 overflow-hidden">
         <div className="hidden grid-cols-[1.6fr_1fr_1fr_1fr_1fr_auto] gap-4 border-b border-border px-6 py-3 text-[11px] font-medium uppercase tracking-wider text-subtle-foreground md:grid">
           <span>Resultado</span>
           <span className="text-right">Tu probabilidad</span>
@@ -77,7 +79,7 @@ export function ValorEsperado({ analysis, selectedOutcome, onSelectOutcome }: Pr
       </div>
       {!bestHasValue && (
         <p className="mt-4 text-sm text-muted-foreground">
-          Ninguna cuota de este partido supera al mercado. La calculadora no sugerirá apuesta.
+          El consenso no ofrece valor positivo bajo este modelo. La calculadora también permite comparar la mejor cuota disponible: puede producir un resultado distinto. No apostar sigue siendo una opción.
         </p>
       )}
 
